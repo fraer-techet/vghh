@@ -1153,118 +1153,144 @@ def is_browser(ua):
             return False
     return ("mozilla" in s) or ("chrome" in s) or ("safari" in s) or ("firefox" in s)
 
+
 def render_denied():
     return (
         "<!DOCTYPE html><html lang=ru><head><meta charset=utf-8>"
         "<meta name=viewport content=\"width=device-width,initial-scale=1\">"
-        "<title>FluxVPN</title>"
-        "<style>"
-        "*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;"
-        "font-family:Inter,SF Pro Text,system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5}"
-        ".card{width:min(440px,92vw);padding:28px;border:1px solid #2a2a2a;border-radius:18px;background:#111}"
-        "h1{margin:0 0 8px;font-size:22px;font-weight:700;letter-spacing:.02em}"
-        "p{margin:0;color:#a3a3a3;line-height:1.55;font-size:14px}"
-        "</style></head><body><div class=card><h1>FluxVPN</h1>"
-        "<p>Подписка неактивна. Открой бота и активируй Trial или Premium.</p></div></body></html>"
+        "<meta name=robots content=noindex,nofollow>"
+        "<title>FluxVPN</title><style>"
+        "*{box-sizing:border-box}html,body{height:100%}"
+        "body{margin:0;display:grid;place-items:center;background:#090909;color:#f2f2f2;"
+        "font-family:Inter,SF Pro Text,-apple-system,system-ui,sans-serif}"
+        ".box{width:min(420px,90vw);text-align:center;padding:36px 28px;border:1px solid #1f1f1f;"
+        "border-radius:24px;background:linear-gradient(180deg,#121212,#0c0c0c)}"
+        ".mark{width:42px;height:42px;border-radius:14px;margin:0 auto 18px;display:grid;place-items:center;"
+        "background:#171717;border:1px solid #2a2a2a;font-weight:800;letter-spacing:.04em;font-size:12px}"
+        "h1{margin:0 0 10px;font-size:22px;font-weight:650;letter-spacing:-.02em}"
+        "p{margin:0;color:#8f8f8f;font-size:14px;line-height:1.6}"
+        "</style></head><body><div class=box>"
+        "<div class=mark>FX</div><h1>Нет доступа</h1>"
+        "<p>Подписка неактивна. Открой бота FluxVPN и продли доступ.</p>"
+        "</div></body></html>"
     )
+
 
 def render_cabinet(user, servers):
     active = is_active(user["status"], user["subscription_expires"])
     left = days_left(user["subscription_expires"]) if active else 0
     until = fmt_until(user["subscription_expires"]) if active else "—"
     link = sub_link(user) or ""
-    status_txt = "✅ Активна" if active else "❌ Неактивна"
+    status_txt = "Active" if active else "Inactive"
     rows = []
     for s in servers:
         flag = extract_flag(s[2])
         title = html_lib.escape(str(s[2]))
         rows.append(
-            "<div class=row><div class=left><span class=flag>"
-            + flag
-            + "</span><div><div class=name>"
-            + title
-            + "</div><div class=meta>Node #"
-            + str(s[0])
-            + "</div></div></div>"
-            + "<div class=ok>Online</div></div>"
+            "<div class=node>"
+            "<div class=nleft><div class=dot></div>"
+            "<div class=flag>" + flag + "</div>"
+            "<div class=nmeta><div class=nname>" + title + "</div></div></div>"
+            "<div class=badge>Online</div></div>"
         )
-    servers_html = "".join(rows) if rows else "<div class=empty>Нет серверов</div>"
+    servers_html = "".join(rows) if rows else "<div class=empty>Пока нет локаций</div>"
     happ = "happ://add/" + urllib.parse.quote(link, safe="") if link else "#"
+    # privacy: do not print full URL in HTML body; keep only in JS const
+    link_js = json.dumps(link)
+    happ_js = json.dumps(happ)
     css = (
         "*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}"
-        "body{margin:0;font-family:Inter,SF Pro Text,system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5}"
-        ".wrap{width:min(720px,100%);margin:0 auto;padding:20px 16px 48px}"
-        ".top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}"
-        ".logo{font-weight:800;letter-spacing:.08em;font-size:14px;text-transform:uppercase}"
-        ".pill{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid #2f2f2f;color:#d4d4d4;background:#121212}"
-        ".card{background:#111;border:1px solid #242424;border-radius:18px;padding:16px;margin-bottom:12px}"
-        ".title{margin:0 0 12px;font-size:16px;font-weight:700}"
-        ".grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}"
-        ".box{background:#0d0d0d;border:1px solid #232323;border-radius:14px;padding:12px}"
-        ".label{color:#8a8a8a;font-size:12px;margin-bottom:6px}"
-        ".val{font-size:18px;font-weight:700}"
-        ".sub{color:#a3a3a3;font-size:12px;margin-top:4px}"
-        ".linkbox{word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"
-        "font-size:12px;line-height:1.5;color:#e5e5e5;background:#0d0d0d;border:1px solid #232323;"
-        "border-radius:14px;padding:12px}"
-        ".actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}"
-        ".btn{display:flex;align-items:center;justify-content:center;text-decoration:none;color:#0a0a0a;"
-        "background:#f5f5f5;border:0;border-radius:12px;padding:12px 10px;font-weight:700;font-size:13px;cursor:pointer}"
-        ".btn.secondary{background:transparent;color:#f5f5f5;border:1px solid #333}"
-        ".row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid #1d1d1d}"
-        ".row:last-child{border-bottom:0}"
-        ".left{display:flex;gap:10px;align-items:center;min-width:0}"
-        ".flag{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#171717;border:1px solid #2a2a2a}"
-        ".name{font-weight:650;font-size:14px}.meta{color:#8a8a8a;font-size:11px;margin-top:2px}"
-        ".ok{color:#d4d4d4;font-size:12px;border:1px solid #2a2a2a;border-radius:999px;padding:5px 8px}"
-        ".note{color:#8a8a8a;font-size:12px;line-height:1.55;margin:0}"
-        ".empty{color:#8a8a8a;padding:8px 0}"
-        "@media(max-width:560px){.grid,.actions{grid-template-columns:1fr}}"
+        "html,body{margin:0;min-height:100%;background:#090909;color:#f3f3f3;"
+        "font-family:Inter,SF Pro Text,-apple-system,BlinkMacSystemFont,system-ui,sans-serif}"
+        "body{background:"
+        "radial-gradient(900px 420px at 50% -10%,rgba(255,255,255,.06),transparent 60%),#090909}"
+        ".wrap{width:min(680px,100%);margin:0 auto;padding:28px 18px 56px}"
+        ".nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}"
+        ".brand{display:flex;align-items:center;gap:10px}"
+        ".logo{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;"
+        "background:#141414;border:1px solid #242424;font-size:11px;font-weight:800;letter-spacing:.06em}"
+        ".brand b{font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}"
+        ".chip{font-size:12px;color:#cfcfcf;border:1px solid #2a2a2a;background:#121212;"
+        "border-radius:999px;padding:7px 11px}"
+        ".chip.on{color:#efefef;border-color:#3a3a3a}"
+        ".hero{padding:22px;border-radius:22px;border:1px solid #1e1e1e;"
+        "background:linear-gradient(180deg,#121212 0%,#0d0d0d 100%);margin-bottom:14px}"
+        ".hero h1{margin:0 0 6px;font-size:28px;line-height:1.1;letter-spacing:-.03em;font-weight:680}"
+        ".hero p{margin:0;color:#8d8d8d;font-size:13px;line-height:1.5}"
+        ".stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}"
+        ".stat{padding:14px;border-radius:16px;background:#0c0c0c;border:1px solid #1c1c1c}"
+        ".stat span{display:block;color:#8a8a8a;font-size:11px;margin-bottom:6px;letter-spacing:.02em}"
+        ".stat b{display:block;font-size:18px;font-weight:700;letter-spacing:-.02em}"
+        ".card{padding:16px;border-radius:20px;border:1px solid #1e1e1e;background:#0f0f0f;margin-bottom:12px}"
+        ".head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}"
+        ".head h2{margin:0;font-size:14px;font-weight:650;letter-spacing:.01em;color:#ececec}"
+        ".muted{color:#7d7d7d;font-size:12px}"
+        ".actions{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:8px}"
+        ".btn{appearance:none;border:0;cursor:pointer;border-radius:13px;padding:12px 10px;"
+        "font-weight:650;font-size:13px;text-decoration:none;display:flex;align-items:center;"
+        "justify-content:center;transition:transform .12s ease,opacity .12s ease;color:#0a0a0a;background:#f2f2f2}"
+        ".btn:active{transform:scale(.98);opacity:.92}"
+        ".btn.ghost{background:transparent;color:#f0f0f0;border:1px solid #2a2a2a}"
+        ".toast{display:none;margin-top:10px;color:#bdbdbd;font-size:12px;text-align:center}"
+        ".toast.show{display:block}"
+        ".node{display:flex;align-items:center;justify-content:space-between;gap:12px;"
+        "padding:12px 2px;border-bottom:1px solid #171717}"
+        ".node:last-child{border-bottom:0;padding-bottom:2px}"
+        ".nleft{display:flex;align-items:center;gap:10px;min-width:0}"
+        ".dot{width:7px;height:7px;border-radius:50%;background:#f5f5f5;box-shadow:0 0 0 4px rgba(255,255,255,.06);flex:0 0 auto}"
+        ".flag{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;"
+        "background:#141414;border:1px solid #222;font-size:15px;flex:0 0 auto}"
+        ".nname{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:48vw}"
+        ".badge{font-size:11px;color:#bdbdbd;border:1px solid #262626;border-radius:999px;padding:5px 9px}"
+        ".empty{color:#7a7a7a;font-size:13px;padding:8px 0}"
+        ".foot{margin-top:18px;text-align:center;color:#5f5f5f;font-size:11px;letter-spacing:.08em;text-transform:uppercase}"
+        "@media(max-width:560px){.stats{grid-template-columns:1fr}.actions{grid-template-columns:1fr}"
+        ".hero h1{font-size:24px}.nname{max-width:42vw}}"
+    )
+    js = (
+        "const SUB=" + link_js + ";"
+        "const HAPP=" + happ_js + ";"
+        "const toast=document.getElementById('toast');"
+        "function flash(m){toast.textContent=m;toast.classList.add('show');"
+        "clearTimeout(window.__t);window.__t=setTimeout(()=>toast.classList.remove('show'),1600)}"
+        "async function copySub(){try{await navigator.clipboard.writeText(SUB);flash('Скопировано');"
+        "}catch(e){flash('Не удалось скопировать')}}"
+        "function openHapp(){if(HAPP&&HAPP!=='#'){location.href=HAPP}else{flash('Недоступно')}}"
     )
     return (
         "<!DOCTYPE html><html lang=ru><head><meta charset=utf-8>"
         "<meta name=viewport content=\"width=device-width,initial-scale=1,viewport-fit=cover\">"
-        "<title>FluxVPN Subscription</title><style>"
+        "<meta name=robots content=noindex,nofollow,noarchive>"
+        "<meta name=referrer content=no-referrer>"
+        "<title>FluxVPN</title><style>"
         + css
         + "</style></head><body><div class=wrap>"
-        "<div class=top><div class=logo>FluxVPN</div>"
-        "<div class=pill>Subscription</div></div>"
-        "<div class=card><div class=title>Статус подписки</div>"
-        "<div class=grid>"
-        "<div class=box><div class=label>Статус</div><div class=val>"
-        + status_txt
-        + "</div></div>"
-        "<div class=box><div class=label>Осталось</div><div class=val>"
-        + str(left)
-        + " дн.</div></div>"
-        "<div class=box><div class=label>Активна до</div><div class=val style=\"font-size:14px\">"
-        + html_lib.escape(until)
-        + "</div><div class=sub>"
-        + ("активна" if active else "нет доступа")
-        + "</div></div>"
-        "<div class=box><div class=label>Серверов</div><div class=val>"
-        + str(len(servers))
-        + "</div></div></div></div>"
-        "<div class=card><div class=title>Быстрый импорт</div>"
+        "<div class=nav><div class=brand><div class=logo>FX</div><b>FluxVPN</b></div>"
+        "<div class=\"chip on\">" + status_txt + "</div></div>"
+        "<section class=hero>"
+        "<h1>Личный кабинет</h1>"
+        "<p>Минимальный доступ к статусу и локациям. Ссылка подписки скрыта и копируется по кнопке.</p>"
+        "<div class=stats>"
+        "<div class=stat><span>Осталось</span><b>" + str(left) + " дн</b></div>"
+        "<div class=stat><span>До</span><b style=\"font-size:13px\">" + html_lib.escape(until) + "</b></div>"
+        "<div class=stat><span>Локации</span><b>" + str(len(servers)) + "</b></div>"
+        "</div></section>"
+        "<section class=card><div class=head><h2>Подключение</h2><span class=muted>private</span></div>"
         "<div class=actions>"
-        "<a class=btn href=\""
-        + html_lib.escape(happ)
-        + "\">Happ</a>"
-        "<button class=\"btn secondary\" onclick=\"navigator.clipboard.writeText(document.getElementById(\x27sub\x27).innerText)\">Скопировать</button>"
-        "</div>"
-        "<p class=note style=\"margin-top:12px\">Если кнопки не сработали — скопируй ссылку вручную и вставь в клиент как subscription URL.</p></div>"
-        "<div class=card><div class=title>Ссылка подписки</div>"
-        "<div class=linkbox id=sub>"
-        + html_lib.escape(link)
-        + "</div></div>"
-        "<div class=card><div class=title>Серверы</div>"
+        "<button class=btn id=copyBtn type=button>Скопировать ключ</button>"
+        "<button class=\"btn ghost\" id=happBtn type=button>Happ</button>"
+        "<button class=\"btn ghost\" id=hideBtn type=button onclick=\"history.replaceState({},'', '/');flash('OK')\">Скрыть</button>"
+        "</div><div class=toast id=toast></div></section>"
+        "<section class=card><div class=head><h2>Локации</h2><span class=muted>" + str(len(servers)) + "</span></div>"
         + servers_html
-        + "</div>"
-        "<div class=card><p class=note>При медленной работе обнови подписку внутри VPN-клиента. "
-        "Сырые vless/ss строки в кабинете скрыты — конфиги получает только клиент.</p></div>"
-        "</div></body></html>"
+        + "</section>"
+        "<div class=foot>FluxVPN</div></div>"
+        "<script>"
+        + js
+        + "document.getElementById('copyBtn').onclick=copySub;"
+        + "document.getElementById('happBtn').onclick=openHapp;"
+        + "</script></body></html>"
     )
-
 
 
 def re_fullmatch_token(token):
