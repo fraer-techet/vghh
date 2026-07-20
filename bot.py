@@ -26,8 +26,15 @@ def env(name, default=""):
 BOT_TOKEN = env("BOT_TOKEN")
 DATABASE_URL = env("DATABASE_URL")
 ADMIN_ID = int(env("ADMIN_ID", "6049379160") or "6049379160")
+ADMIN_USERNAME = (env("ADMIN_USERNAME", "zrdws") or "zrdws").lstrip("@")
 PREMIUM_DAYS = int(env("PREMIUM_DAYS", "30") or "30")
 PREMIUM_STARS = int(env("PREMIUM_STARS", "150") or "150")
+PREMIUM_PLANS = [
+    {"days": 7, "key": "7"},
+    {"days": 14, "key": "14"},
+    {"days": 30, "key": "30"},
+    {"days": 365, "key": "365"},
+]
 PORT = int(env("PORT", "10000") or "10000")
 PUBLIC_URL = (env("PUBLIC_URL") or env("RENDER_EXTERNAL_URL") or "").rstrip("/")
 
@@ -64,7 +71,21 @@ TEXTS = {
         "trial_avail": "Доступен пробный период 7 дней.",
         "need_premium": "Нужен Premium для доступа.",
         "btn_trial": "Триал 7 дней",
-        "btn_buy": "Premium",
+        "btn_buy": "Купить Premium",
+        "buy_title": "<b>Premium</b>\nВыбери срок. Оплата — в личные сообщения админу.",
+        "buy_plan_7": "7 дней",
+        "buy_plan_14": "14 дней",
+        "buy_plan_30": "30 дней",
+        "buy_plan_365": "1 год",
+        "buy_order": "Заявка на <b>{days} дн.</b> Premium.\n\n1) Нажми «Написать админу»\n2) Отправь ему этот заказ\n3) После оплаты доступ выдадут вручную.\n\n<code>{order}</code>",
+        "btn_write_admin": "Написать админу",
+        "btn_choose_plan": "Другой срок",
+        "admin_new_order": "🛒 <b>Новый заказ</b>\nОт: <code>{uid}</code> {name}\nПлан: <b>{days} дн.</b>",
+        "btn_order_paid": "✅ Заказ оплачен",
+        "order_paid_ok": "✅ Заказ подтверждён.\nЮзеру <code>{uid}</code> выдано <b>{days} дн.</b> Premium.",
+        "order_paid_user": "✅ Оплата подтверждена.\nТебе начислено <b>{days} дн.</b> Premium.",
+        "order_paid_done": "Уже обработан",
+        "order_bad": "Некорректный заказ",
         "btn_status": "Статус",
         "btn_ref": "Рефералка",
         "btn_servers": "Серверы",
@@ -140,7 +161,21 @@ TEXTS = {
         "trial_avail": "7-day trial available.",
         "need_premium": "Premium required.",
         "btn_trial": "Trial 7 days",
-        "btn_buy": "Premium",
+        "btn_buy": "Buy Premium",
+        "buy_title": "<b>Premium</b>\nChoose a plan. Payment is via admin DM.",
+        "buy_plan_7": "7 days",
+        "buy_plan_14": "14 days",
+        "buy_plan_30": "30 days",
+        "buy_plan_365": "1 year",
+        "buy_order": "Order: <b>{days}d</b> Premium.\n\n1) Tap Write admin\n2) Send this order\n3) Access after payment.\n\n<code>{order}</code>",
+        "btn_write_admin": "Write admin",
+        "btn_choose_plan": "Other plan",
+        "admin_new_order": "🛒 <b>New order</b>\nFrom: <code>{uid}</code> {name}\nPlan: <b>{days}d</b>",
+        "btn_order_paid": "✅ Order paid",
+        "order_paid_ok": "✅ Order confirmed.\nUser <code>{uid}</code> got <b>{days}d</b> Premium.",
+        "order_paid_user": "✅ Payment confirmed.\nYou received <b>{days}d</b> Premium.",
+        "order_paid_done": "Already processed",
+        "order_bad": "Invalid order",
         "btn_status": "Status",
         "btn_ref": "Referral",
         "btn_servers": "Servers",
@@ -482,6 +517,63 @@ def kb_servers(user):
         ])
     rows.append([{"text": t(lang, "btn_back"), "callback_data": "mysub"}])
     return {"inline_keyboard": rows}
+
+def kb_buy_plans(lang):
+    return {
+        "inline_keyboard": [
+            [
+                {"text": t(lang, "buy_plan_7"), "callback_data": "buy_7"},
+                {"text": t(lang, "buy_plan_14"), "callback_data": "buy_14"},
+            ],
+            [
+                {"text": t(lang, "buy_plan_30"), "callback_data": "buy_30"},
+                {"text": t(lang, "buy_plan_365"), "callback_data": "buy_365"},
+            ],
+            [{"text": t(lang, "btn_back"), "callback_data": "mysub"}],
+        ]
+    }
+
+
+def admin_dm_link(order_text=""):
+    base = "https://t.me/" + ADMIN_USERNAME
+    if order_text:
+        return base + "?text=" + urllib.parse.quote(order_text)
+    return base
+
+
+
+
+def make_order_text(user, days):
+    uname = display_name(user)
+    parts = [
+        "FluxVPN order",
+        "ID: " + str(user["telegram_id"]),
+        "User: " + uname,
+        "Plan: " + str(days) + " days Premium",
+    ]
+    return chr(10).join(parts)
+
+
+def kb_admin_order(uid, days):
+    return {
+        "inline_keyboard": [
+            [{
+                "text": t("ru", "btn_order_paid"),
+                "callback_data": "paid_" + str(int(uid)) + "_" + str(int(days)),
+            }],
+        ]
+    }
+
+
+def kb_buy_order(lang, order_text):
+    return {
+        "inline_keyboard": [
+            [{"text": t(lang, "btn_write_admin"), "url": admin_dm_link(order_text)}],
+            [{"text": t(lang, "btn_choose_plan"), "callback_data": "buy"}],
+            [{"text": t(lang, "btn_back"), "callback_data": "mysub"}],
+        ]
+    }
+
 
 def kb_cancel(lang):
     return {"inline_keyboard": [[{"text": t(lang, "cancel"), "callback_data": "adm_cancel"}]]}
@@ -873,18 +965,34 @@ def handle_cb(conn, cq):
         return
 
     if data == "buy":
-        api(
-            "sendInvoice",
-            {
-                "chat_id": tg_id,
-                "title": BRAND + " Premium " + str(PREMIUM_DAYS) + " days",
-                "description": BRAND,
-                "payload": "premium:" + str(PREMIUM_DAYS),
-                "currency": "XTR",
-                "prices": [{"label": BRAND + " Premium", "amount": PREMIUM_STARS}],
-                "provider_token": "",
-            },
-        )
+        edit(chat, mid, t(lang, "buy_title"), kb_buy_plans(lang))
+        ans(cq["id"])
+        return
+
+    if data.startswith("buy_") and data[4:].isdigit():
+        days = int(data.split("_", 1)[1])
+        if days not in (7, 14, 30, 365):
+            ans(cq["id"])
+            return
+        order = make_order_text(user, days)
+        text = t(lang, "buy_order", days=days, order=html_lib.escape(order))
+        edit(chat, mid, text, kb_buy_order(lang, order))
+        # notify admin in background-ish
+        try:
+            uname = html_lib.escape(display_name(user))
+            send(
+                ADMIN_ID,
+                t(
+                    "ru",
+                    "admin_new_order",
+                    uid=tg_id,
+                    name=uname,
+                    days=days,
+                ),
+                kb_admin_order(tg_id, days),
+            )
+        except Exception:
+            pass
         ans(cq["id"])
         return
 
@@ -907,6 +1015,44 @@ def handle_cb(conn, cq):
 
     if tg_id != ADMIN_ID:
         ans(cq["id"])
+        return
+
+
+    if data.startswith("paid_"):
+        if tg_id != ADMIN_ID:
+            ans(cq["id"])
+            return
+        parts = data.split("_")
+        # paid_<uid>_<days>
+        if len(parts) != 3 or (not parts[1].isdigit()) or (not parts[2].isdigit()):
+            ans(cq["id"], t(lang, "order_bad"), True)
+            return
+        uid = int(parts[1])
+        days = int(parts[2])
+        if days not in (7, 14, 30, 365, 90, 9999):
+            # allow common grant lengths too
+            if days <= 0 or days > 4000:
+                ans(cq["id"], t(lang, "order_bad"), True)
+                return
+        ensure_user(conn, uid)
+        target = extend_subscription(conn, uid, days, status="premium")
+        # update admin message
+        edit(
+            chat,
+            mid,
+            t(lang, "order_paid_ok", uid=uid, days=days),
+            {"inline_keyboard": []},
+        )
+        try:
+            tlang = lang_of(target or {})
+            send(
+                uid,
+                t(tlang, "order_paid_user", days=days) + chr(10) + chr(10) + status_text(target),
+                kb_main(target),
+            )
+        except Exception:
+            pass
+        ans(cq["id"], "OK")
         return
 
     if data == "adm_cancel":
@@ -1160,20 +1306,11 @@ def handle_pay(conn, msg):
     send(chat, t(lang, "pay_ok") + "\n\n" + status_text(user), kb_main(user))
 
 def process(conn, upd):
-    if "pre_checkout_query" in upd:
-        api(
-            "answerPreCheckoutQuery",
-            {"pre_checkout_query_id": upd["pre_checkout_query"]["id"], "ok": True},
-        )
-        return
     if "callback_query" in upd:
         handle_cb(conn, upd["callback_query"])
         return
     msg = upd.get("message") or upd.get("edited_message")
     if not msg:
-        return
-    if msg.get("successful_payment"):
-        handle_pay(conn, msg)
         return
     if msg.get("text"):
         handle_cmd(conn, msg)
@@ -1712,7 +1849,7 @@ def main():
                 {
                     "timeout": 50,
                     "offset": offset,
-                    "allowed_updates": ["message", "callback_query", "pre_checkout_query"],
+                    "allowed_updates": ["message", "callback_query"],
                 },
                 timeout=60,
             )
