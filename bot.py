@@ -1265,6 +1265,65 @@ def render_cabinet(user, servers):
         "</div></body></html>"
     )
 
+
+
+def re_fullmatch_token(token):
+    import re as _re
+    return bool(_re.fullmatch(r"[A-Za-z0-9_-]+", token or ""))
+
+
+def b64url(s):
+    import base64
+    raw = base64.b64encode(str(s).encode("utf-8")).decode("ascii")
+    return raw.rstrip("=")
+
+
+def expired_sub_body(lang="ru"):
+    if lang == "en":
+        title = "FluxVPN | Subscription expired"
+    else:
+        title = "FluxVPN | Подписка истекла"
+    remark = urllib.parse.quote(title, safe="")
+    line = (
+        "vless://00000000-0000-0000-0000-000000000000@127.0.0.1:1"
+        + "?encryption=none&security=none&type=tcp#"
+        + remark
+    )
+    return line + chr(10)
+
+
+
+def sub_headers(expire_ts=0, upload=0, download=0, total=0):
+    title_b64 = b64url(BRAND)
+    info = (
+        "upload=" + str(int(upload))
+        + "; download=" + str(int(download))
+        + "; total=" + str(int(total))
+        + "; expire=" + str(int(expire_ts or 0))
+    )
+    return {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+        "Profile-Update-Interval": "1",
+        "profile-update-interval": "1",
+        "Profile-Title": "base64:" + title_b64,
+        "profile-title": "base64:" + title_b64,
+        "Content-Disposition": 'attachment; filename="FluxVPN"',
+        "subscription-userinfo": info,
+        "Subscription-Userinfo": info,
+    }
+
+
+def send_sub_response(handler, body, expire_ts=0):
+    data = body.encode("utf-8") if isinstance(body, str) else body
+    handler.send_response(200)
+    for k, v in sub_headers(expire_ts=expire_ts).items():
+        handler.send_header(k, v)
+    handler.send_header("Content-Length", str(len(data)))
+    handler.end_headers()
+    handler.wfile.write(data)
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print("http", self.address_string(), fmt % args, flush=True)
@@ -1286,38 +1345,51 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path.startswith("/sub/"):
                 token = path.split("/sub/", 1)[1].strip("/")
-                if not token:
-                    self._send(400, "text/plain; charset=utf-8", "missing token")
+                if (not token) or (len(token) < 16) or (len(token) > 128) or (not re_fullmatch_token(token)):
+                    self._send(400, "text/plain; charset=utf-8", "bad token")
                     return
                 conn = db()
                 try:
                     ensure_schema(conn)
                     rows = conn.run(USER_SELECT + " where sub_token=:t limit 1", t=token)
                     user = user_row(rows[0]) if rows else None
-                    if (not user) or (not is_active(user["status"], user["subscription_expires"])):
-                        if is_browser(self.headers.get("User-Agent")):
+                    browser = is_browser(self.headers.get("User-Agent"))
+
+                    if not user:
+                        if browser:
                             self._send(403, "text/html; charset=utf-8", render_denied())
                         else:
-                            self._send(403, "text/plain; charset=utf-8", "subscription inactive")
+                            send_sub_response(self, expired_sub_body("ru"), expire_ts=0)
                         return
+
+                    lang = lang_of(user)
+                    active = is_active(user["status"], user["subscription_expires"])
+                    exp_ts = 0
+                    if user.get("subscription_expires") is not None:
+                        exp = user["subscription_expires"]
+                        if getattr(exp, "tzinfo", None) is None:
+                            exp = exp.replace(tzinfo=timezone.utc)
+                        exp_ts = int(exp.timestamp())
+
+                    if browser:
+                        if not active:
+                            self._send(200, "text/html; charset=utf-8", render_denied())
+                        else:
+                            servers = get_servers(conn)
+                            self._send(200, "text/html; charset=utf-8", render_cabinet(user, servers))
+                        return
+
+                    # VPN clients always get 200 so old nodes are replaced on refresh
+                    if not active:
+                        send_sub_response(self, expired_sub_body(lang), expire_ts=exp_ts)
+                        return
+
                     servers = get_servers(conn)
-                    if is_browser(self.headers.get("User-Agent")):
-                        self._send(200, "text/html; charset=utf-8", render_cabinet(user, servers))
-                        return
                     lines = [brand_config(s[1], s[2]) for s in servers if brand_config(s[1], s[2])]
-                    body = "\n".join(lines) + ("\n" if lines else "")
-                    exp = user["subscription_expires"]
-                    if getattr(exp, "tzinfo", None) is None:
-                        exp = exp.replace(tzinfo=timezone.utc)
-                    data = body.encode("utf-8")
-                    self.send_response(200)
-                    self.send_header("Content-Type", "text/plain; charset=utf-8")
-                    self.send_header("Cache-Control", "no-store")
-                    self.send_header("Profile-Update-Interval", "12")
-                    self.send_header("Subscription-Userinfo", "expire=" + str(int(exp.timestamp())))
-                    self.send_header("Content-Length", str(len(data)))
-                    self.end_headers()
-                    self.wfile.write(data)
+                    body = chr(10).join(lines)
+                    if body:
+                        body = body + chr(10)
+                    send_sub_response(self, body, expire_ts=exp_ts)
                 finally:
                     conn.close()
                 return
