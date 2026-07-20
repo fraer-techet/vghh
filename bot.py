@@ -17,6 +17,8 @@ import pg8000.native
 
 BRAND = "FluxVPN"
 REF_BONUS_DAYS = 5
+TRIAL_DEVICE_LIMIT = 2
+PREMIUM_DEVICE_LIMIT = 4
 
 def env(name, default=""):
     return os.environ.get(name, default)
@@ -271,6 +273,22 @@ def ensure_schema(conn):
         )
         try:
             conn.run("create unique index if not exists idx_users_referral_code on users(referral_code)")
+        except Exception:
+            pass
+        conn.run(
+            "create table if not exists devices ("
+            "id bigserial primary key, "
+            "telegram_id bigint not null, "
+            "device_hash text not null, "
+            "device_name text not null default 'Device', "
+            "user_agent text, "
+            "last_ip text, "
+            "created_at timestamptz not null default now(), "
+            "last_seen timestamptz not null default now(), "
+            "unique(telegram_id, device_hash))"
+        )
+        try:
+            conn.run("create index if not exists idx_devices_tg on devices(telegram_id)")
         except Exception:
             pass
         _schema_ready = True
@@ -1180,6 +1198,137 @@ def is_browser(ua):
     return ("mozilla" in s) or ("chrome" in s) or ("safari" in s) or ("firefox" in s)
 
 
+
+def device_limit_for(user):
+    if not is_active(user["status"], user["subscription_expires"]):
+        return 0
+    if user["status"] == "trial":
+        return TRIAL_DEVICE_LIMIT
+    if user["status"] == "premium":
+        return PREMIUM_DEVICE_LIMIT
+    return 0
+
+
+def client_ip(handler):
+    xff = handler.headers.get("X-Forwarded-For") or handler.headers.get("x-forwarded-for") or ""
+    if xff:
+        return xff.split(",")[0].strip()[:64]
+    try:
+        return (handler.client_address[0] or "")[:64]
+    except Exception:
+        return ""
+
+
+def device_hash_from(ua, ip):
+    import hashlib
+    raw = (ua or "unknown") + "|" + (ip or "")
+    return hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()[:32]
+
+
+def device_name_from(ua):
+    s = (ua or "").strip()
+    if not s:
+        return "Unknown device"
+    low = s.lower()
+    if "hiddify" in low:
+        return "Hiddify"
+    if "happ" in low:
+        return "Happ"
+    if "v2rayng" in low or "v2ray" in low:
+        return "v2rayNG"
+    if "clash" in low:
+        return "Clash"
+    if "streisand" in low:
+        return "Streisand"
+    if "shadowrocket" in low:
+        return "Shadowrocket"
+    if "nekobox" in low:
+        return "NekoBox"
+    if "sing-box" in low or "sfa" in low:
+        return "sing-box"
+    if "okhttp" in low:
+        return "Android client"
+    if "cfnetwork" in low or "darwin" in low:
+        return "iOS client"
+    # short clean label
+    name = s.split("/")[0].split(" ")[0]
+    return (name or "Device")[:40]
+
+
+def list_devices(conn, telegram_id):
+    return conn.run(
+        "select id, device_name, user_agent, last_ip, created_at, last_seen, device_hash "
+        "from devices where telegram_id=:tg order by last_seen desc",
+        tg=telegram_id,
+    )
+
+
+def count_devices(conn, telegram_id):
+    return int(conn.run("select count(*) from devices where telegram_id=:tg", tg=telegram_id)[0][0])
+
+
+def touch_device(conn, user, ua, ip):
+    """Register/update VPN client device. Returns (allowed: bool, devices_count, limit)."""
+    limit = device_limit_for(user)
+    tg = user["telegram_id"]
+    dhash = device_hash_from(ua, ip)
+    name = device_name_from(ua)
+    existing = conn.run(
+        "select id from devices where telegram_id=:tg and device_hash=:h limit 1",
+        tg=tg,
+        h=dhash,
+    )
+    if existing:
+        conn.run(
+            "update devices set last_seen=now(), user_agent=:ua, last_ip=:ip, device_name=:n where id=:id",
+            ua=(ua or "")[:300],
+            ip=ip or "",
+            n=name,
+            id=existing[0][0],
+        )
+        cnt = count_devices(conn, tg)
+        return True, cnt, limit
+
+    cnt = count_devices(conn, tg)
+    if cnt >= limit:
+        return False, cnt, limit
+
+    conn.run(
+        "insert into devices (telegram_id, device_hash, device_name, user_agent, last_ip) "
+        "values (:tg, :h, :n, :ua, :ip)",
+        tg=tg,
+        h=dhash,
+        n=name,
+        ua=(ua or "")[:300],
+        ip=ip or "",
+    )
+    cnt = count_devices(conn, tg)
+    return True, cnt, limit
+
+
+def delete_device(conn, telegram_id, device_id):
+    rows = conn.run(
+        "delete from devices where id=:id and telegram_id=:tg returning id",
+        id=int(device_id),
+        tg=telegram_id,
+    )
+    return bool(rows)
+
+
+def limit_sub_body(lang="ru"):
+    if lang == "en":
+        title = "FluxVPN | Device limit"
+    else:
+        title = "FluxVPN | Лимит устройств"
+    remark = urllib.parse.quote(title, safe="")
+    line = (
+        "vless://00000000-0000-0000-0000-000000000000@127.0.0.1:1"
+        + "?encryption=none&security=none&type=tcp#"
+        + remark
+    )
+    return line + chr(10)
+
+
 def render_denied():
     return (
         "<!DOCTYPE html><html lang=ru><head><meta charset=utf-8>"
@@ -1202,12 +1351,17 @@ def render_denied():
     )
 
 
-def render_cabinet(user, servers):
+def render_cabinet(user, servers, devices=None, device_limit=0):
+    if devices is None:
+        devices = []
     active = is_active(user["status"], user["subscription_expires"])
     left = days_left(user["subscription_expires"]) if active else 0
     until = fmt_until(user["subscription_expires"]) if active else "—"
     link = sub_link(user) or ""
     status_txt = "Active" if active else "Inactive"
+    token = html_lib.escape(user.get("sub_token") or "")
+    dev_count = len(devices)
+
     rows = []
     for s in servers:
         flag = extract_flag(s[2])
@@ -1220,99 +1374,119 @@ def render_cabinet(user, servers):
             "<div class=badge>Online</div></div>"
         )
     servers_html = "".join(rows) if rows else "<div class=empty>Пока нет локаций</div>"
+
+    dev_rows = []
+    for d in devices:
+        did = str(d[0])
+        dname = html_lib.escape(str(d[1] or "Device"))
+        seen = d[5]
+        try:
+            seen_s = seen.strftime("%Y-%m-%d %H:%M") if hasattr(seen, "strftime") else str(seen)[:16]
+        except Exception:
+            seen_s = "—"
+        del_url = "/sub/" + token + "/device/" + did + "/delete"
+        dev_rows.append(
+            "<div class=node>"
+            "<div class=nleft><div class=dot></div>"
+            "<div class=nmeta><div class=nname>" + dname + "</div>"
+            "<div class=nsub>" + html_lib.escape(seen_s) + "</div></div></div>"
+            "<a class=xbtn href=\"" + del_url + "\">Удалить</a></div>"
+        )
+    devices_html = "".join(dev_rows) if dev_rows else "<div class=empty>Нет привязанных устройств</div>"
+
     happ = "happ://add/" + urllib.parse.quote(link, safe="") if link else "#"
-    # privacy: do not print full URL in HTML body; keep only in JS const
     link_js = json.dumps(link)
     happ_js = json.dumps(happ)
     css = (
         "*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}"
         "html,body{margin:0;min-height:100%;background:#090909;color:#f3f3f3;"
         "font-family:Inter,SF Pro Text,-apple-system,BlinkMacSystemFont,system-ui,sans-serif}"
-        "body{background:"
-        "radial-gradient(900px 420px at 50% -10%,rgba(255,255,255,.06),transparent 60%),#090909}"
+        "body{background:radial-gradient(900px 420px at 50% -10%,rgba(255,255,255,.06),transparent 60%),#090909}"
         ".wrap{width:min(680px,100%);margin:0 auto;padding:28px 18px 56px}"
         ".nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}"
         ".brand{display:flex;align-items:center;gap:10px}"
         ".logo{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;"
         "background:#141414;border:1px solid #242424;font-size:11px;font-weight:800;letter-spacing:.06em}"
         ".brand b{font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}"
-        ".chip{font-size:12px;color:#cfcfcf;border:1px solid #2a2a2a;background:#121212;"
-        "border-radius:999px;padding:7px 11px}"
-        ".chip.on{color:#efefef;border-color:#3a3a3a}"
-        ".hero{padding:22px;border-radius:22px;border:1px solid #1e1e1e;"
-        "background:linear-gradient(180deg,#121212 0%,#0d0d0d 100%);margin-bottom:14px}"
+        ".chip{font-size:12px;color:#cfcfcf;border:1px solid #2a2a2a;background:#121212;border-radius:999px;padding:7px 11px}"
+        ".hero{padding:22px;border-radius:22px;border:1px solid #1e1e1e;background:linear-gradient(180deg,#121212,#0d0d0d);margin-bottom:14px}"
         ".hero h1{margin:0 0 6px;font-size:28px;line-height:1.1;letter-spacing:-.03em;font-weight:680}"
         ".hero p{margin:0;color:#8d8d8d;font-size:13px;line-height:1.5}"
-        ".stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}"
+        ".stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}"
         ".stat{padding:14px;border-radius:16px;background:#0c0c0c;border:1px solid #1c1c1c}"
-        ".stat span{display:block;color:#8a8a8a;font-size:11px;margin-bottom:6px;letter-spacing:.02em}"
+        ".stat span{display:block;color:#8a8a8a;font-size:11px;margin-bottom:6px}"
         ".stat b{display:block;font-size:18px;font-weight:700;letter-spacing:-.02em}"
+        ".tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}"
+        ".tab{border:1px solid #2a2a2a;background:#101010;color:#e8e8e8;padding:10px 14px;border-radius:999px;cursor:pointer;font-weight:600;font-size:13px}"
+        ".tab.on{background:#f2f2f2;color:#0a0a0a;border-color:#f2f2f2}"
+        ".panel{display:none}.panel.on{display:block}"
         ".card{padding:16px;border-radius:20px;border:1px solid #1e1e1e;background:#0f0f0f;margin-bottom:12px}"
         ".head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}"
-        ".head h2{margin:0;font-size:14px;font-weight:650;letter-spacing:.01em;color:#ececec}"
+        ".head h2{margin:0;font-size:14px;font-weight:650;color:#ececec}"
         ".muted{color:#7d7d7d;font-size:12px}"
         ".actions{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:8px}"
-        ".btn{appearance:none;border:0;cursor:pointer;border-radius:13px;padding:12px 10px;"
-        "font-weight:650;font-size:13px;text-decoration:none;display:flex;align-items:center;"
-        "justify-content:center;transition:transform .12s ease,opacity .12s ease;color:#0a0a0a;background:#f2f2f2}"
-        ".btn:active{transform:scale(.98);opacity:.92}"
+        ".btn{appearance:none;border:0;cursor:pointer;border-radius:13px;padding:12px 10px;font-weight:650;font-size:13px;"
+        "text-decoration:none;display:flex;align-items:center;justify-content:center;color:#0a0a0a;background:#f2f2f2}"
         ".btn.ghost{background:transparent;color:#f0f0f0;border:1px solid #2a2a2a}"
-        ".toast{display:none;margin-top:10px;color:#bdbdbd;font-size:12px;text-align:center}"
-        ".toast.show{display:block}"
-        ".node{display:flex;align-items:center;justify-content:space-between;gap:12px;"
-        "padding:12px 2px;border-bottom:1px solid #171717}"
-        ".node:last-child{border-bottom:0;padding-bottom:2px}"
+        ".toast{display:none;margin-top:10px;color:#bdbdbd;font-size:12px;text-align:center}.toast.show{display:block}"
+        ".node{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 2px;border-bottom:1px solid #171717}"
+        ".node:last-child{border-bottom:0}"
         ".nleft{display:flex;align-items:center;gap:10px;min-width:0}"
         ".dot{width:7px;height:7px;border-radius:50%;background:#f5f5f5;box-shadow:0 0 0 4px rgba(255,255,255,.06);flex:0 0 auto}"
-        ".flag{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;"
-        "background:#141414;border:1px solid #222;font-size:15px;flex:0 0 auto}"
-        ".nname{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:48vw}"
+        ".flag{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:#141414;border:1px solid #222;font-size:15px}"
+        ".nname{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}"
+        ".nsub{color:#7a7a7a;font-size:11px;margin-top:2px}"
         ".badge{font-size:11px;color:#bdbdbd;border:1px solid #262626;border-radius:999px;padding:5px 9px}"
+        ".xbtn{font-size:12px;color:#111;background:#efefef;text-decoration:none;border-radius:999px;padding:7px 10px;font-weight:650}"
         ".empty{color:#7a7a7a;font-size:13px;padding:8px 0}"
+        ".note{color:#8a8a8a;font-size:12px;line-height:1.5;margin:0 0 12px}"
         ".foot{margin-top:18px;text-align:center;color:#5f5f5f;font-size:11px;letter-spacing:.08em;text-transform:uppercase}"
-        "@media(max-width:560px){.stats{grid-template-columns:1fr}.actions{grid-template-columns:1fr}"
-        ".hero h1{font-size:24px}.nname{max-width:42vw}}"
+        "@media(max-width:560px){.stats{grid-template-columns:1fr 1fr}.actions{grid-template-columns:1fr}.hero h1{font-size:24px}}"
     )
     js = (
-        "const SUB=" + link_js + ";"
-        "const HAPP=" + happ_js + ";"
+        "const SUB=" + link_js + ";const HAPP=" + happ_js + ";"
         "const toast=document.getElementById('toast');"
-        "function flash(m){toast.textContent=m;toast.classList.add('show');"
-        "clearTimeout(window.__t);window.__t=setTimeout(()=>toast.classList.remove('show'),1600)}"
-        "async function copySub(){try{await navigator.clipboard.writeText(SUB);flash('Скопировано');"
-        "}catch(e){flash('Не удалось скопировать')}}"
-        "function openHapp(){if(HAPP&&HAPP!=='#'){location.href=HAPP}else{flash('Недоступно')}}"
+        "function flash(m){toast.textContent=m;toast.classList.add('show');clearTimeout(window.__t);window.__t=setTimeout(()=>toast.classList.remove('show'),1600)}"
+        "async function copySub(){try{await navigator.clipboard.writeText(SUB);flash('Скопировано')}catch(e){flash('Ошибка')}}"
+        "function openHapp(){if(HAPP&&HAPP!=='#')location.href=HAPP;else flash('Недоступно')}"
+        "document.querySelectorAll('.tab').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));"
+        "document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));btn.classList.add('on');"
+        "document.getElementById(btn.dataset.tab).classList.add('on')});"
     )
     return (
         "<!DOCTYPE html><html lang=ru><head><meta charset=utf-8>"
         "<meta name=viewport content=\"width=device-width,initial-scale=1,viewport-fit=cover\">"
-        "<meta name=robots content=noindex,nofollow,noarchive>"
-        "<meta name=referrer content=no-referrer>"
-        "<title>FluxVPN</title><style>"
-        + css
-        + "</style></head><body><div class=wrap>"
+        "<meta name=robots content=noindex,nofollow,noarchive><meta name=referrer content=no-referrer>"
+        "<title>FluxVPN</title><style>" + css + "</style></head><body><div class=wrap>"
         "<div class=nav><div class=brand><div class=logo>FX</div><b>FluxVPN</b></div>"
-        "<div class=\"chip on\">" + status_txt + "</div></div>"
-        "<section class=hero>"
-        "<h1>Личный кабинет</h1>"
-        "<p>Минимальный доступ к статусу и локациям. Ссылка подписки скрыта и копируется по кнопке.</p>"
+        "<div class=chip>" + status_txt + "</div></div>"
+        "<section class=hero><h1>Кабинет</h1>"
+        "<p>Статус, локации и устройства. Ключ подписки не показывается — только копирование.</p>"
         "<div class=stats>"
         "<div class=stat><span>Осталось</span><b>" + str(left) + " дн</b></div>"
-        "<div class=stat><span>До</span><b style=\"font-size:13px\">" + html_lib.escape(until) + "</b></div>"
+        "<div class=stat><span>До</span><b style=\"font-size:12px\">" + html_lib.escape(until) + "</b></div>"
         "<div class=stat><span>Локации</span><b>" + str(len(servers)) + "</b></div>"
+        "<div class=stat><span>Устройства</span><b>" + str(dev_count) + "/" + str(int(device_limit or 0)) + "</b></div>"
         "</div></section>"
-        "<section class=card><div class=head><h2>Подключение</h2><span class=muted>private</span></div>"
+        "<div class=tabs>"
+        "<button class=\"tab on\" type=button data-tab=p-home>Обзор</button>"
+        "<button class=tab type=button data-tab=p-loc>Локации</button>"
+        "<button class=tab type=button data-tab=p-dev>Устройства</button>"
+        "</div>"
+        "<section id=p-home class=\"panel on\">"
+        "<div class=card><div class=head><h2>Подключение</h2><span class=muted>private</span></div>"
         "<div class=actions>"
         "<button class=btn id=copyBtn type=button>Скопировать ключ</button>"
         "<button class=\"btn ghost\" id=happBtn type=button>Happ</button>"
-        "<button class=\"btn ghost\" id=hideBtn type=button onclick=\"history.replaceState({},'', '/');flash('OK')\">Скрыть</button>"
-        "</div><div class=toast id=toast></div></section>"
-        "<section class=card><div class=head><h2>Локации</h2><span class=muted>" + str(len(servers)) + "</span></div>"
-        + servers_html
-        + "</section>"
-        "<div class=foot>FluxVPN</div></div>"
-        "<script>"
-        + js
+        "<button class=\"btn ghost\" type=button onclick=\"history.replaceState({},'', '/');flash('OK')\">Скрыть</button>"
+        "</div><div class=toast id=toast></div></div></section>"
+        "<section id=p-loc class=panel><div class=card><div class=head><h2>Локации</h2>"
+        "<span class=muted>" + str(len(servers)) + "</span></div>" + servers_html + "</div></section>"
+        "<section id=p-dev class=panel><div class=card><div class=head><h2>Устройства</h2>"
+        "<span class=muted>" + str(dev_count) + " / " + str(int(device_limit or 0)) + "</span></div>"
+        "<p class=note>Trial — до 2 устройств, Premium — до 4. При превышении подписка отдаёт «Лимит устройств». Удали лишние здесь.</p>"
+        + devices_html + "</div></section>"
+        "<div class=foot>FluxVPN</div></div><script>" + js
         + "document.getElementById('copyBtn').onclick=copySub;"
         + "document.getElementById('happBtn').onclick=openHapp;"
         + "</script></body></html>"
@@ -1391,60 +1565,106 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
-            path = urllib.parse.urlparse(self.path).path
+            parsed = urllib.parse.urlparse(self.path)
+            path = parsed.path
             if path in ("/", "/health", "/favicon.ico"):
                 self._send(200, "text/plain; charset=utf-8", "FluxVPN ok")
                 return
-            if path.startswith("/sub/"):
-                token = path.split("/sub/", 1)[1].strip("/")
-                if (not token) or (len(token) < 16) or (len(token) > 128) or (not re_fullmatch_token(token)):
-                    self._send(400, "text/plain; charset=utf-8", "bad token")
-                    return
-                conn = db()
-                try:
-                    ensure_schema(conn)
-                    rows = conn.run(USER_SELECT + " where sub_token=:t limit 1", t=token)
-                    user = user_row(rows[0]) if rows else None
-                    browser = is_browser(self.headers.get("User-Agent"))
 
-                    if not user:
-                        if browser:
+            # /sub/{token}/device/{id}/delete
+            parts = [x for x in path.split("/") if x]
+            if len(parts) >= 1 and parts[0] == "sub":
+                if len(parts) == 4 and parts[2] == "device" and parts[3].isdigit() is False and False:
+                    pass
+                # delete device: sub/<token>/device/<id>/delete
+                if len(parts) == 5 and parts[2] == "device" and parts[4] == "delete" and parts[3].isdigit():
+                    token = parts[1]
+                    dev_id = parts[3]
+                    if (not re_fullmatch_token(token)) or len(token) < 16:
+                        self._send(400, "text/plain; charset=utf-8", "bad token")
+                        return
+                    conn = db()
+                    try:
+                        ensure_schema(conn)
+                        rows = conn.run(USER_SELECT + " where sub_token=:t limit 1", t=token)
+                        user = user_row(rows[0]) if rows else None
+                        if not user or not is_active(user["status"], user["subscription_expires"]):
                             self._send(403, "text/html; charset=utf-8", render_denied())
-                        else:
-                            send_sub_response(self, expired_sub_body("ru"), expire_ts=0)
+                            return
+                        delete_device(conn, user["telegram_id"], dev_id)
+                        # redirect back to cabinet
+                        self.send_response(302)
+                        self.send_header("Location", "/sub/" + token + "#devices")
+                        self.send_header("Cache-Control", "no-store")
+                        self.end_headers()
                         return
+                    finally:
+                        conn.close()
 
-                    lang = lang_of(user)
-                    active = is_active(user["status"], user["subscription_expires"])
-                    exp_ts = 0
-                    if user.get("subscription_expires") is not None:
-                        exp = user["subscription_expires"]
-                        if getattr(exp, "tzinfo", None) is None:
-                            exp = exp.replace(tzinfo=timezone.utc)
-                        exp_ts = int(exp.timestamp())
+                if len(parts) >= 2:
+                    token = parts[1]
+                    if (not token) or (len(token) < 16) or (len(token) > 128) or (not re_fullmatch_token(token)):
+                        self._send(400, "text/plain; charset=utf-8", "bad token")
+                        return
+                    conn = db()
+                    try:
+                        ensure_schema(conn)
+                        rows = conn.run(USER_SELECT + " where sub_token=:t limit 1", t=token)
+                        user = user_row(rows[0]) if rows else None
+                        ua = self.headers.get("User-Agent") or ""
+                        browser = is_browser(ua)
+                        ip = client_ip(self)
 
-                    if browser:
+                        if not user:
+                            if browser:
+                                self._send(403, "text/html; charset=utf-8", render_denied())
+                            else:
+                                send_sub_response(self, expired_sub_body("ru"), expire_ts=0)
+                            return
+
+                        lang = lang_of(user)
+                        active = is_active(user["status"], user["subscription_expires"])
+                        exp_ts = 0
+                        if user.get("subscription_expires") is not None:
+                            exp = user["subscription_expires"]
+                            if getattr(exp, "tzinfo", None) is None:
+                                exp = exp.replace(tzinfo=timezone.utc)
+                            exp_ts = int(exp.timestamp())
+
+                        if browser:
+                            if not active:
+                                self._send(200, "text/html; charset=utf-8", render_denied())
+                            else:
+                                servers = get_servers(conn)
+                                devices = list_devices(conn, user["telegram_id"])
+                                limit = device_limit_for(user)
+                                self._send(
+                                    200,
+                                    "text/html; charset=utf-8",
+                                    render_cabinet(user, servers, devices=devices, device_limit=limit),
+                                )
+                            return
+
+                        # VPN clients
                         if not active:
-                            self._send(200, "text/html; charset=utf-8", render_denied())
-                        else:
-                            servers = get_servers(conn)
-                            self._send(200, "text/html; charset=utf-8", render_cabinet(user, servers))
-                        return
+                            send_sub_response(self, expired_sub_body(lang), expire_ts=exp_ts)
+                            return
 
-                    # VPN clients always get 200 so old nodes are replaced on refresh
-                    if not active:
-                        send_sub_response(self, expired_sub_body(lang), expire_ts=exp_ts)
-                        return
+                        allowed, cnt, limit = touch_device(conn, user, ua, ip)
+                        if not allowed:
+                            send_sub_response(self, limit_sub_body(lang), expire_ts=exp_ts)
+                            return
 
-                    servers = get_servers(conn)
-                    lines = [brand_config(s[1], s[2]) for s in servers if brand_config(s[1], s[2])]
-                    body = chr(10).join(lines)
-                    if body:
-                        body = body + chr(10)
-                    send_sub_response(self, body, expire_ts=exp_ts)
-                finally:
-                    conn.close()
-                return
+                        servers = get_servers(conn)
+                        lines = [brand_config(s[1], s[2]) for s in servers if brand_config(s[1], s[2])]
+                        body = chr(10).join(lines)
+                        if body:
+                            body = body + chr(10)
+                        send_sub_response(self, body, expire_ts=exp_ts)
+                    finally:
+                        conn.close()
+                    return
+
             self._send(404, "text/plain; charset=utf-8", "not found")
         except Exception:
             print("http error", traceback.format_exc(), flush=True)
