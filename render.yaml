@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: vpn-bot
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.11"
+      - key: BOT_TOKEN
+        value: "8895620936:AAF1xmCh1tO-hn0lMNigLAe8LLPIcwVDgQg"
+      - key: DATABASE_URL
+        value: "postgresql://neondb_owner:npg_KjqZrHsJn6E1@ep-noisy-butterfly-avbk5yxh.c-11.us-east-1.aws.neon.tech/neondb?sslmode=require"
+      - key: ADMIN_ID
+        value: "6049379160"
+      - key: PREMIUM_DAYS
+        value: "30"
+      - key: PREMIUM_STARS
+        value: "150"
