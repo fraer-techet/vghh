@@ -1,5 +1,5 @@
-
-import html
+# -*- coding: utf-8 -*-
+import html as html_lib
 import json
 import os
 import secrets
@@ -41,10 +41,170 @@ print("boot", BRAND, "PORT=", PORT, flush=True)
 
 _schema_lock = threading.Lock()
 _schema_ready = False
+PENDING = {}
 USER_SELECT = (
     "select telegram_id, status, trial_used, subscription_expires, sub_token, "
-    "referral_code, referred_by, referral_count, username, full_name from users"
+    "referral_code, referred_by, referral_count, username, full_name, lang from users"
 )
+
+TEXTS = {
+    "ru": {
+        "choose_lang": "Выбери язык / Choose language",
+        "welcome": "Добро пожаловать в <b>{brand}</b>\nПремиальный VPN с личным кабинетом.",
+        "welcome_ref": "Тебя пригласили в <b>{brand}</b> по реферальной ссылке.\nСпасибо, что с нами!",
+        "status_title": "⚡ <b>{brand}</b>",
+        "plan": "📦 План: <b>{plan}</b>",
+        "days": "⏳ Осталось: <b>{days} дн.</b>",
+        "inactive": "⏳ Подписка не активна",
+        "refs": "🎁 Рефералы: <b>{n}</b> (+{bonus} дн. за друга)",
+        "sub": "🔗 Ссылка подписки:",
+        "ref_link": "🤝 Твоя реф-ссылка:",
+        "trial_avail": "✨ Доступен бесплатный триал на 7 дней.",
+        "need_premium": "💎 Оформи Premium, чтобы открыть доступ.",
+        "btn_trial": "✨ Триал 7 дней",
+        "btn_buy": "💎 Купить Premium",
+        "btn_status": "📊 Статус",
+        "btn_ref": "🎁 Рефералка",
+        "btn_servers": "🛰 Серверы",
+        "btn_cab": "🖥 Кабинет",
+        "btn_admin": "🛠 Админка",
+        "btn_back": "⬅️ Назад",
+        "trial_ok": "✅ Триал на 7 дней активирован!",
+        "trial_used": "Триал уже использован",
+        "already": "Подписка уже активна",
+        "need_sub": "Нужна активная подписка",
+        "servers_title": "🛰 <b>Серверы {brand}</b>",
+        "servers_empty": "Пока нет серверов.",
+        "servers_note": "Конфиги подтягиваются автоматически по subscription-ссылке в клиенте.",
+        "ref_title": "🎁 <b>Реферальная программа</b>",
+        "ref_body": "Приглашай друзей.\nЗа каждого нового — <b>+{bonus} дней</b>.\nПриглашено: <b>{n}</b>",
+        "ref_bonus_inviter": "🎉 <b>Реферальный бонус!</b>\nПо твоей ссылке зарегистрировался новый пользователь.\n+{bonus} дней к подписке {brand}.",
+        "pay_ok": "✅ Оплата прошла! Premium активирован.",
+        "admin_title": "🛠 <b>Админка {brand}</b>",
+        "admin_stats": "👥 Юзеров: <b>{total}</b>\n🟢 Активных: <b>{active}</b>\n💎 Premium: <b>{premium}</b>\n✨ Trial: <b>{trial}</b>\n🎁 Рефов: <b>{refs}</b>\n🛰 Серверов: <b>{servers}</b>",
+        "adm_stats": "📈 Статистика",
+        "adm_users": "👥 Пользователи",
+        "adm_servers": "🛰 Серверы",
+        "adm_active": "🟢 Активные",
+        "adm_broadcast": "📣 Рассылка",
+        "adm_grant_self": "👑 Себе Premium",
+        "adm_grant_user": "➕ Юзеру дни",
+        "adm_trial": "🧪 Выдать триал",
+        "adm_revoke": "⛔ Снять доступ",
+        "adm_add_srv": "➕ Сервер",
+        "adm_del_srv": "🗑 Удалить сервер",
+        "adm_find": "🔎 Найти юзера",
+        "ask_user_id": "Отправь Telegram ID пользователя числом.",
+        "ask_broadcast": "Отправь текст рассылки одним сообщением.",
+        "ask_server_name": "Отправь название сервера (можно с флагом).\nПример: 🇩🇪 Germany",
+        "ask_server_cfg": "Отправь raw-конфиг (vless/ss строку).",
+        "choose_days": "Сколько дней выдать?",
+        "days_7": "7 дней",
+        "days_30": "30 дней",
+        "days_90": "90 дней",
+        "days_365": "365 дней",
+        "days_9999": "∞ Навсегда",
+        "granted": "✅ Выдано {days} дн. пользователю <code>{id}</code>",
+        "granted_self": "✅ Тебе начислено {days} дн. Premium",
+        "revoked": "⛔ Доступ снят у <code>{id}</code>",
+        "trial_given": "✅ Триал выдан <code>{id}</code>",
+        "not_found": "Не найден",
+        "broadcast_done": "Рассылка: OK {ok} / fail {fail}",
+        "server_added": "✅ Сервер #{id} — {name}",
+        "server_deleted": "🗑 Удалён",
+        "cancel": "❌ Отмена",
+        "cancelled": "Отменено.",
+        "users_title": "👥 <b>Последние пользователи</b>",
+        "active_title": "🟢 <b>Активные</b>",
+        "none_active": "Активных нет.",
+        "pick_server_del": "Выбери сервер для удаления:",
+        "no_servers": "Серверов нет.",
+        "lang_set": "Язык сохранён: Русский",
+    },
+    "en": {
+        "choose_lang": "Choose language / Выбери язык",
+        "welcome": "Welcome to <b>{brand}</b>\nPremium VPN with personal cabinet.",
+        "welcome_ref": "You joined <b>{brand}</b> via a referral link.\nGlad to have you!",
+        "status_title": "⚡ <b>{brand}</b>",
+        "plan": "📦 Plan: <b>{plan}</b>",
+        "days": "⏳ Left: <b>{days} d</b>",
+        "inactive": "⏳ Subscription inactive",
+        "refs": "🎁 Referrals: <b>{n}</b> (+{bonus}d each)",
+        "sub": "🔗 Subscription link:",
+        "ref_link": "🤝 Your referral link:",
+        "trial_avail": "✨ Free 7-day trial available.",
+        "need_premium": "💎 Get Premium to open access.",
+        "btn_trial": "✨ Trial 7 days",
+        "btn_buy": "💎 Buy Premium",
+        "btn_status": "📊 Status",
+        "btn_ref": "🎁 Referral",
+        "btn_servers": "🛰 Servers",
+        "btn_cab": "🖥 Cabinet",
+        "btn_admin": "🛠 Admin",
+        "btn_back": "⬅️ Back",
+        "trial_ok": "✅ 7-day trial activated!",
+        "trial_used": "Trial already used",
+        "already": "Already active",
+        "need_sub": "Active subscription required",
+        "servers_title": "🛰 <b>{brand} servers</b>",
+        "servers_empty": "No servers yet.",
+        "servers_note": "Configs are pulled automatically via subscription URL in the client.",
+        "ref_title": "🎁 <b>Referral program</b>",
+        "ref_body": "Invite friends.\nEach new user = <b>+{bonus} days</b>.\nInvited: <b>{n}</b>",
+        "ref_bonus_inviter": "🎉 <b>Referral bonus!</b>\nSomeone joined with your link.\n+{bonus} days on {brand}.",
+        "pay_ok": "✅ Payment ok! Premium activated.",
+        "admin_title": "🛠 <b>{brand} Admin</b>",
+        "admin_stats": "👥 Users: <b>{total}</b>\n🟢 Active: <b>{active}</b>\n💎 Premium: <b>{premium}</b>\n✨ Trial: <b>{trial}</b>\n🎁 Refs: <b>{refs}</b>\n🛰 Servers: <b>{servers}</b>",
+        "adm_stats": "📈 Stats",
+        "adm_users": "👥 Users",
+        "adm_servers": "🛰 Servers",
+        "adm_active": "🟢 Active",
+        "adm_broadcast": "📣 Broadcast",
+        "adm_grant_self": "👑 Premium to me",
+        "adm_grant_user": "➕ Days to user",
+        "adm_trial": "🧪 Give trial",
+        "adm_revoke": "⛔ Revoke",
+        "adm_add_srv": "➕ Server",
+        "adm_del_srv": "🗑 Delete server",
+        "adm_find": "🔎 Find user",
+        "ask_user_id": "Send user Telegram ID as a number.",
+        "ask_broadcast": "Send broadcast text in one message.",
+        "ask_server_name": "Send server name (flag allowed).\nExample: 🇩🇪 Germany",
+        "ask_server_cfg": "Send raw config (vless/ss line).",
+        "choose_days": "How many days?",
+        "days_7": "7 days",
+        "days_30": "30 days",
+        "days_90": "90 days",
+        "days_365": "365 days",
+        "days_9999": "∞ Forever",
+        "granted": "✅ Granted {days}d to <code>{id}</code>",
+        "granted_self": "✅ Added {days}d Premium to you",
+        "revoked": "⛔ Revoked <code>{id}</code>",
+        "trial_given": "✅ Trial given to <code>{id}</code>",
+        "not_found": "Not found",
+        "broadcast_done": "Broadcast: OK {ok} / fail {fail}",
+        "server_added": "✅ Server #{id} — {name}",
+        "server_deleted": "🗑 Deleted",
+        "cancel": "❌ Cancel",
+        "cancelled": "Cancelled.",
+        "users_title": "👥 <b>Latest users</b>",
+        "active_title": "🟢 <b>Active</b>",
+        "none_active": "No active subs.",
+        "pick_server_del": "Pick server to delete:",
+        "no_servers": "No servers.",
+        "lang_set": "Language saved: English",
+    },
+}
+
+def t(lang, key, **kw):
+    lang = lang if lang in TEXTS else "ru"
+    s = TEXTS[lang].get(key) or TEXTS["ru"].get(key) or key
+    if kw:
+        try:
+            return s.format(**kw)
+        except Exception:
+            return s
+    return s
 
 def utcnow():
     return datetime.now(timezone.utc)
@@ -95,12 +255,13 @@ def ensure_schema(conn):
             ("referral_count", "add column referral_count integer not null default 0"),
             ("username", "add column username text"),
             ("full_name", "add column full_name text"),
+            ("lang", "add column lang text"),
         ]:
             if col not in cols:
                 conn.run("alter table users " + ddl)
         conn.run(
             "update users set referral_code = md5(random()::text || clock_timestamp()::text) "
-            "where referral_code is null or referral_code = ''"
+            "where referral_code is null or referral_code = \'\'"
         )
         try:
             conn.run("create unique index if not exists idx_users_referral_code on users(referral_code)")
@@ -144,6 +305,13 @@ def days_left(expires):
         return 0
     return max(1, int((sec + 86399) // 86400))
 
+def fmt_until(expires):
+    if expires is None:
+        return "—"
+    if getattr(expires, "tzinfo", None) is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    return expires.strftime("%Y-%m-%d %H:%M:%S UTC")
+
 def user_row(r):
     return {
         "telegram_id": r[0],
@@ -156,6 +324,7 @@ def user_row(r):
         "referral_count": int(r[7] or 0) if len(r) > 7 else 0,
         "username": r[8] if len(r) > 8 else None,
         "full_name": r[9] if len(r) > 9 else None,
+        "lang": r[10] if len(r) > 10 else None,
     }
 
 def gen_codes():
@@ -174,7 +343,7 @@ def extract_flag(name):
         o = ord(ch)
         if 0x1F1E6 <= o <= 0x1F1FF:
             return ch
-    return "\U0001F310"
+    return "•"
 
 def brand_config(raw, name):
     cfg = (raw or "").strip()
@@ -197,86 +366,133 @@ def ref_link(user):
         return "https://t.me/" + me + "?start=ref_" + code
     return "ref_" + code
 
-def plan_label(user):
+def plan_label(user, lang="ru"):
     if is_active(user["status"], user["subscription_expires"]):
         return "Trial" if user["status"] == "trial" else "Premium"
     return "Free"
 
+def lang_of(user):
+    lg = (user or {}).get("lang")
+    return lg if lg in ("ru", "en") else "ru"
+
 def status_text(user):
+    lang = lang_of(user)
     link = sub_link(user)
     active = is_active(user["status"], user["subscription_expires"])
     lines = [
-        "\u26A1 <b>" + BRAND + "</b>",
+        t(lang, "status_title", brand=BRAND),
         "",
-        "\U0001F464 " + html.escape(display_name(user)),
-        "\U0001F4E6 Plan: <b>" + plan_label(user) + "</b>",
+        "👤 " + html_lib.escape(display_name(user)),
+        t(lang, "plan", plan=plan_label(user, lang)),
     ]
     if active:
-        lines.append("\u23F3 Days left: <b>" + str(days_left(user["subscription_expires"])) + "</b>")
+        lines.append(t(lang, "days", days=days_left(user["subscription_expires"])))
     else:
-        lines.append("\u23F3 Subscription inactive")
+        lines.append(t(lang, "inactive"))
     lines.append(
-        "\U0001F381 Referrals: <b>"
-        + str(user.get("referral_count") or 0)
-        + "</b> (+"
-        + str(REF_BONUS_DAYS)
-        + " days each)"
+        t(lang, "refs", n=user.get("referral_count") or 0, bonus=REF_BONUS_DAYS)
     )
     if link:
-        lines.extend(["", "\U0001F517 Subscription:", "<code>" + html.escape(link) + "</code>"])
-    lines.extend(["", "\U0001F91D Ref link:", "<code>" + html.escape(ref_link(user)) + "</code>"])
+        lines.extend(["", t(lang, "sub"), "<code>" + html_lib.escape(link) + "</code>"])
+    lines.extend(
+        ["", t(lang, "ref_link"), "<code>" + html_lib.escape(ref_link(user)) + "</code>"]
+    )
     if not active and not user["trial_used"]:
-        lines.extend(["", "\u2728 Free 7-day trial available."])
+        lines.extend(["", t(lang, "trial_avail")])
     elif not active:
-        lines.extend(["", "\U0001F48E Buy Premium to restore access."])
+        lines.extend(["", t(lang, "need_premium")])
     return "\n".join(lines)
 
-def kb_main(user):
-    rows = []
-    active = is_active(user["status"], user["subscription_expires"])
-    if (not user["trial_used"]) and (not active):
-        rows.append([{"text": "\u2728 Trial 7 days", "callback_data": "trial"}])
-    rows.append([{"text": "\U0001F48E Buy Premium", "callback_data": "buy"}])
-    rows.append(
-        [
-            {"text": "\U0001F4CA Status", "callback_data": "mysub"},
-            {"text": "\U0001F381 Referral", "callback_data": "referral"},
-        ]
-    )
-    if active:
-        rows.append([{"text": "\U0001F6F0 Servers", "callback_data": "servers"}])
-    link = sub_link(user)
-    if link:
-        rows.append([{"text": "\U0001F5A5 Cabinet", "url": link}])
-    if user["telegram_id"] == ADMIN_ID:
-        rows.append([{"text": "\U0001F6E0 Admin", "callback_data": "admin"}])
-    return {"inline_keyboard": rows}
-
-def kb_admin():
+def kb_lang():
     return {
         "inline_keyboard": [
             [
-                {"text": "\U0001F4C8 Stats", "callback_data": "adm_stats"},
-                {"text": "\U0001F465 Users", "callback_data": "adm_users"},
+                {"text": "🇷🇺 Русский", "callback_data": "lang_ru"},
+                {"text": "🇬🇧 English", "callback_data": "lang_en"},
+            ]
+        ]
+    }
+
+def kb_main(user):
+    lang = lang_of(user)
+    rows = []
+    active = is_active(user["status"], user["subscription_expires"])
+    if (not user["trial_used"]) and (not active):
+        rows.append([{"text": t(lang, "btn_trial"), "callback_data": "trial"}])
+    rows.append([{"text": t(lang, "btn_buy"), "callback_data": "buy"}])
+    rows.append(
+        [
+            {"text": t(lang, "btn_status"), "callback_data": "mysub"},
+            {"text": t(lang, "btn_ref"), "callback_data": "referral"},
+        ]
+    )
+    if active:
+        rows.append([{"text": t(lang, "btn_servers"), "callback_data": "servers"}])
+    link = sub_link(user)
+    if link:
+        rows.append([{"text": t(lang, "btn_cab"), "url": link}])
+    rows.append([{"text": "🌐 EN/RU", "callback_data": "lang_menu"}])
+    if user["telegram_id"] == ADMIN_ID:
+        rows.append([{"text": t(lang, "btn_admin"), "callback_data": "admin"}])
+    return {"inline_keyboard": rows}
+
+def kb_cancel(lang):
+    return {"inline_keyboard": [[{"text": t(lang, "cancel"), "callback_data": "adm_cancel"}]]}
+
+def kb_admin(lang):
+    return {
+        "inline_keyboard": [
+            [
+                {"text": t(lang, "adm_stats"), "callback_data": "adm_stats"},
+                {"text": t(lang, "adm_users"), "callback_data": "adm_users"},
             ],
             [
-                {"text": "\U0001F6F0 Servers", "callback_data": "adm_servers"},
-                {"text": "\U0001F7E2 Active", "callback_data": "adm_active"},
+                {"text": t(lang, "adm_servers"), "callback_data": "adm_servers"},
+                {"text": t(lang, "adm_active"), "callback_data": "adm_active"},
             ],
             [
-                {"text": "\U0001F4E3 Broadcast", "callback_data": "adm_broadcast"},
-                {"text": "+ Days", "callback_data": "adm_grant_help"},
+                {"text": t(lang, "adm_grant_self"), "callback_data": "adm_grant_self"},
+                {"text": t(lang, "adm_grant_user"), "callback_data": "adm_grant_user"},
             ],
             [
-                {"text": "Trial", "callback_data": "adm_trial_help"},
-                {"text": "Revoke", "callback_data": "adm_revoke_help"},
+                {"text": t(lang, "adm_trial"), "callback_data": "adm_trial"},
+                {"text": t(lang, "adm_revoke"), "callback_data": "adm_revoke"},
             ],
-            [{"text": "Back", "callback_data": "mysub"}],
+            [
+                {"text": t(lang, "adm_add_srv"), "callback_data": "adm_add_srv"},
+                {"text": t(lang, "adm_del_srv"), "callback_data": "adm_del_srv"},
+            ],
+            [
+                {"text": t(lang, "adm_broadcast"), "callback_data": "adm_broadcast"},
+                {"text": t(lang, "adm_find"), "callback_data": "adm_find"},
+            ],
+            [{"text": t(lang, "btn_back"), "callback_data": "mysub"}],
+        ]
+    }
+
+def kb_days(prefix, lang):
+    return {
+        "inline_keyboard": [
+            [
+                {"text": t(lang, "days_7"), "callback_data": prefix + "_7"},
+                {"text": t(lang, "days_30"), "callback_data": prefix + "_30"},
+            ],
+            [
+                {"text": t(lang, "days_90"), "callback_data": prefix + "_90"},
+                {"text": t(lang, "days_365"), "callback_data": prefix + "_365"},
+            ],
+            [{ "text": t(lang, "days_9999"), "callback_data": prefix + "_9999" }],
+            [{ "text": t(lang, "cancel"), "callback_data": "adm_cancel" }],
         ]
     }
 
 def send(chat_id, text, markup=None):
-    p = {"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
+    p = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
     if markup is not None:
         p["reply_markup"] = markup
     return api("sendMessage", p)
@@ -306,7 +522,7 @@ def get_user(conn, tg_id):
     rows = conn.run(USER_SELECT + " where telegram_id = :id", id=tg_id)
     return user_row(rows[0]) if rows else None
 
-def ensure_user(conn, tg_id, username=None, full_name=None, ref_code=None):
+def ensure_user(conn, tg_id, username=None, full_name=None, ref_code=None, lang=None):
     ensure_schema(conn)
     existing = get_user(conn, tg_id)
     if existing:
@@ -326,20 +542,25 @@ def ensure_user(conn, tg_id, username=None, full_name=None, ref_code=None):
         if rows and rows[0][0] != tg_id:
             referred_by = rows[0][0]
     conn.run(
-        "insert into users (telegram_id, status, trial_used, sub_token, referral_code, referred_by, referral_count, username, full_name) "
-        "values (:id, 'free', false, :st, :rc, :rb, 0, :u, :f)",
+        "insert into users (telegram_id, status, trial_used, sub_token, referral_code, referred_by, referral_count, username, full_name, lang) "
+        "values (:id, 'free', false, :st, :rc, :rb, 0, :u, :f, :lg)",
         id=tg_id,
         st=sub_token,
         rc=referral_code,
         rb=referred_by,
         u=username,
         f=full_name,
+        lg=lang,
     )
     user = get_user(conn, tg_id)
     if referred_by:
         apply_referral_bonus(conn, referred_by, tg_id)
         user = get_user(conn, tg_id)
     return user
+
+def set_lang(conn, tg_id, lang):
+    conn.run("update users set lang=:l where telegram_id=:id", l=lang, id=tg_id)
+    return get_user(conn, tg_id)
 
 def extend_subscription(conn, tg_id, days, status="premium"):
     user = get_user(conn, tg_id) or ensure_user(conn, tg_id)
@@ -351,7 +572,7 @@ def extend_subscription(conn, tg_id, days, status="premium"):
             exp = exp.replace(tzinfo=timezone.utc)
         if exp > now:
             base = exp
-    expires = base + timedelta(days=days)
+    expires = base + timedelta(days=int(days))
     conn.run(
         "update users set status=:s, subscription_expires=:e where telegram_id=:id",
         s=status,
@@ -380,11 +601,12 @@ def apply_referral_bonus(conn, inviter_id, newbie_id):
     try:
         send(
             inviter_id,
-            "\U0001F389 <b>Referral bonus!</b>\n+"
-            + str(REF_BONUS_DAYS)
-            + " days on "
-            + BRAND
-            + ".",
+            t(
+                lang_of(inviter),
+                "ref_bonus_inviter",
+                bonus=REF_BONUS_DAYS,
+                brand=BRAND,
+            ),
         )
     except Exception:
         pass
@@ -393,20 +615,19 @@ def get_servers(conn):
     ensure_schema(conn)
     return conn.run("select id, raw_config, custom_name from server_pool order by id")
 
-def servers_list_text(conn):
+def servers_list_text(conn, lang):
     rows = get_servers(conn)
     if not rows:
-        return "No servers yet."
-    lines = ["\U0001F6F0 <b>" + BRAND + " servers</b>", ""]
+        return t(lang, "servers_empty")
+    lines = [t(lang, "servers_title", brand=BRAND), ""]
     for r in rows:
-        lines.append(extract_flag(r[2]) + " <b>" + html.escape(str(r[2])) + "</b>")
-    lines.extend(["", "Configs are delivered only via subscription URL in the client."])
+        lines.append(extract_flag(r[2]) + " <b>" + html_lib.escape(str(r[2])) + "</b>")
+    lines.extend(["", t(lang, "servers_note")])
     return "\n".join(lines)
 
-def admin_stats_text(conn):
+def admin_stats_text(conn, lang):
     ensure_schema(conn)
     total = conn.run("select count(*) from users")[0][0]
-    trial_used = conn.run("select count(*) from users where trial_used = true")[0][0]
     servers = conn.run("select count(*) from server_pool")[0][0]
     refs = conn.run("select coalesce(sum(referral_count),0) from users")[0][0]
     active = premium = trial = 0
@@ -419,21 +640,26 @@ def admin_stats_text(conn):
             elif u["status"] == "trial":
                 trial += 1
     return (
-        "\U0001F6E0 <b>" + BRAND + " Admin</b>\n\n"
-        "Users: <b>" + str(total) + "</b>\n"
-        "Active: <b>" + str(active) + "</b>\n"
-        "Premium: <b>" + str(premium) + "</b>\n"
-        "Trial live: <b>" + str(trial) + "</b>\n"
-        "Trial used: <b>" + str(trial_used) + "</b>\n"
-        "Referrals: <b>" + str(refs) + "</b>\n"
-        "Servers: <b>" + str(servers) + "</b>"
+        t(lang, "admin_title", brand=BRAND)
+        + "\n\n"
+        + t(
+            lang,
+            "admin_stats",
+            total=total,
+            active=active,
+            premium=premium,
+            trial=trial,
+            refs=refs,
+            servers=servers,
+        )
     )
 
-def admin_users_text(conn, limit=15):
+def admin_users_text(conn, lang, limit=12):
     rows = conn.run(USER_SELECT + " order by id desc limit :n", n=limit)
+    lines = [t(lang, "users_title"), ""]
     if not rows:
-        return "No users."
-    lines = ["\U0001F465 <b>Latest users</b>", ""]
+        lines.append(t(lang, "not_found"))
+        return "\n".join(lines)
     for r in rows:
         u = user_row(r)
         left = (
@@ -442,23 +668,20 @@ def admin_users_text(conn, limit=15):
             else 0
         )
         lines.append(
-            "\u2022 <code>"
+            "• <code>"
             + str(u["telegram_id"])
             + "</code> "
-            + html.escape(display_name(u))
-            + " - <b>"
-            + plan_label(u)
+            + html_lib.escape(display_name(u))
+            + " — <b>"
+            + plan_label(u, lang)
             + "</b>"
-            + (" / " + str(left) + "d" if left else "")
-            + " / ref "
-            + str(u.get("referral_count") or 0)
+            + (" · " + str(left) + "d" if left else "")
         )
-    lines.extend(["", "/grant ID DAYS", "/trial ID", "/revoke ID", "/find ID"])
     return "\n".join(lines)
 
-def admin_active_text(conn):
-    rows = conn.run(USER_SELECT + " order by subscription_expires desc nulls last limit 50")
-    lines = ["\U0001F7E2 <b>Active</b>", ""]
+def admin_active_text(conn, lang):
+    rows = conn.run(USER_SELECT + " order by subscription_expires desc nulls last limit 40")
+    lines = [t(lang, "active_title"), ""]
     n = 0
     for r in rows:
         u = user_row(r)
@@ -466,61 +689,83 @@ def admin_active_text(conn):
             continue
         n += 1
         lines.append(
-            "\u2022 <code>"
+            "• <code>"
             + str(u["telegram_id"])
             + "</code> "
-            + html.escape(display_name(u))
-            + " - "
-            + plan_label(u)
-            + " / "
+            + html_lib.escape(display_name(u))
+            + " — "
+            + plan_label(u, lang)
+            + " · "
             + str(days_left(u["subscription_expires"]))
             + "d"
         )
     if n == 0:
-        lines.append("None active.")
+        lines.append(t(lang, "none_active"))
     return "\n".join(lines)
 
-def admin_servers_text(conn):
+def admin_servers_text(conn, lang):
     rows = get_servers(conn)
-    lines = ["\U0001F6F0 <b>Server pool</b>", ""]
+    lines = [t(lang, "servers_title", brand=BRAND), ""]
     if not rows:
-        lines.append("Empty.")
+        lines.append(t(lang, "no_servers"))
     else:
         for r in rows:
             lines.append(
                 extract_flag(r[2])
                 + " <b>#"
                 + str(r[0])
-                + "</b> - "
-                + html.escape(str(r[2]))
+                + "</b> — "
+                + html_lib.escape(str(r[2]))
             )
-    lines.extend(
-        [
-            "",
-            "/add_server NAME|||config",
-            "/delete_server ID",
-            "/edit_name ID|||NAME",
-        ]
-    )
     return "\n".join(lines)
+
+def kb_delete_servers(conn, lang):
+    rows = get_servers(conn)
+    if not rows:
+        return None, t(lang, "no_servers")
+    ik = []
+    for r in rows:
+        ik.append(
+            [
+                {
+                    "text": extract_flag(r[2]) + " #" + str(r[0]) + " " + str(r[2])[:28],
+                    "callback_data": "adel_" + str(r[0]),
+                }
+            ]
+        )
+    ik.append([{"text": t(lang, "cancel"), "callback_data": "adm_cancel"}])
+    return {"inline_keyboard": ik}, t(lang, "pick_server_del")
+
+def clear_pending(tg_id):
+    PENDING.pop(tg_id, None)
+
+def handle_start(conn, msg, ref_code=None):
+    tg_id = msg["from"]["id"]
+    chat = msg["chat"]["id"]
+    username, full_name = from_user_meta(msg.get("from") or {})
+    existing = get_user(conn, tg_id)
+    is_new = existing is None
+    user = ensure_user(
+        conn, tg_id, username=username, full_name=full_name, ref_code=ref_code if is_new else None
+    )
+    if not user.get("lang"):
+        PENDING[tg_id] = {"action": "choose_lang", "ref_new": bool(is_new and ref_code)}
+        send(chat, TEXTS["ru"]["choose_lang"], kb_lang())
+        return
+    lang = lang_of(user)
+    if is_new and ref_code:
+        text = t(lang, "welcome_ref", brand=BRAND) + "\n\n" + status_text(user)
+    else:
+        text = t(lang, "welcome", brand=BRAND) + "\n\n" + status_text(user)
+    send(chat, text, kb_main(user))
 
 def from_user_meta(u):
     username = u.get("username")
     full_name = ((u.get("first_name") or "") + " " + (u.get("last_name") or "")).strip() or None
     return username, full_name
 
-def handle_start(conn, msg, ref_code=None):
-    tg_id = msg["from"]["id"]
-    chat = msg["chat"]["id"]
-    username, full_name = from_user_meta(msg.get("from") or {})
-    user = ensure_user(conn, tg_id, username=username, full_name=full_name, ref_code=ref_code)
-    text = (
-        "\U0001F680 Welcome to <b>"
-        + BRAND
-        + "</b>\nPremium VPN with cabinet and referrals.\n\n"
-        + status_text(user)
-    )
-    send(chat, text, kb_main(user))
+def open_admin(conn, chat, mid, lang):
+    edit(chat, mid, admin_stats_text(conn, lang), kb_admin(lang))
 
 def handle_cb(conn, cq):
     data = cq.get("data") or ""
@@ -529,32 +774,48 @@ def handle_cb(conn, cq):
     mid = cq["message"]["message_id"]
     username, full_name = from_user_meta(cq.get("from") or {})
     user = ensure_user(conn, tg_id, username=username, full_name=full_name)
+    lang = lang_of(user)
+
+    if data in ("lang_ru", "lang_en"):
+        lg = "ru" if data.endswith("ru") else "en"
+        user = set_lang(conn, tg_id, lg)
+        lang = lg
+        pend = PENDING.pop(tg_id, None) or {}
+        prefix = t(lang, "welcome_ref", brand=BRAND) if pend.get("ref_new") else t(lang, "welcome", brand=BRAND)
+        edit(chat, mid, t(lang, "lang_set") + "\n\n" + prefix + "\n\n" + status_text(user), kb_main(user))
+        ans(cq["id"])
+        return
+
+    if data == "lang_menu":
+        edit(chat, mid, TEXTS["ru"]["choose_lang"], kb_lang())
+        ans(cq["id"])
+        return
 
     if data == "mysub":
+        clear_pending(tg_id)
         edit(chat, mid, status_text(user), kb_main(user))
         ans(cq["id"])
         return
+
     if data == "referral":
-        t = (
-            "\U0001F381 <b>"
-            + BRAND
-            + " referral</b>\n\n+"
-            + str(REF_BONUS_DAYS)
-            + " days for each friend.\nInvited: <b>"
-            + str(user.get("referral_count") or 0)
-            + "</b>\n\n<code>"
-            + html.escape(ref_link(user))
+        text = (
+            t(lang, "ref_title")
+            + "\n\n"
+            + t(lang, "ref_body", bonus=REF_BONUS_DAYS, n=user.get("referral_count") or 0)
+            + "\n\n<code>"
+            + html_lib.escape(ref_link(user))
             + "</code>"
         )
-        edit(chat, mid, t, kb_main(user))
+        edit(chat, mid, text, kb_main(user))
         ans(cq["id"])
         return
+
     if data == "trial":
         if is_active(user["status"], user["subscription_expires"]):
-            ans(cq["id"], "Already active", True)
+            ans(cq["id"], t(lang, "already"), True)
             return
         if user["trial_used"]:
-            ans(cq["id"], "Trial already used", True)
+            ans(cq["id"], t(lang, "trial_used"), True)
             return
         exp = utcnow() + timedelta(days=7)
         conn.run(
@@ -563,16 +824,17 @@ def handle_cb(conn, cq):
             id=tg_id,
         )
         user = get_user(conn, tg_id)
-        edit(chat, mid, "\u2705 Trial 7 days on!\n\n" + status_text(user), kb_main(user))
+        edit(chat, mid, t(lang, "trial_ok") + "\n\n" + status_text(user), kb_main(user))
         ans(cq["id"], "OK")
         return
+
     if data == "buy":
         api(
             "sendInvoice",
             {
                 "chat_id": tg_id,
                 "title": BRAND + " Premium " + str(PREMIUM_DAYS) + " days",
-                "description": BRAND + " access",
+                "description": BRAND,
                 "payload": "premium:" + str(PREMIUM_DAYS),
                 "currency": "XTR",
                 "prices": [{"label": BRAND + " Premium", "amount": PREMIUM_STARS}],
@@ -581,46 +843,244 @@ def handle_cb(conn, cq):
         )
         ans(cq["id"])
         return
+
     if data == "servers":
         if not is_active(user["status"], user["subscription_expires"]):
-            ans(cq["id"], "Need active sub", True)
+            ans(cq["id"], t(lang, "need_sub"), True)
             return
-        edit(chat, mid, servers_list_text(conn), kb_main(user))
+        edit(chat, mid, servers_list_text(conn, lang), kb_main(user))
         ans(cq["id"])
         return
+
     if data == "admin":
         if tg_id != ADMIN_ID:
             ans(cq["id"])
             return
-        edit(chat, mid, admin_stats_text(conn), kb_admin())
+        clear_pending(tg_id)
+        open_admin(conn, chat, mid, lang)
         ans(cq["id"])
         return
-    if data.startswith("adm_") and tg_id == ADMIN_ID:
-        if data == "adm_stats":
-            edit(chat, mid, admin_stats_text(conn), kb_admin())
-        elif data == "adm_users":
-            edit(chat, mid, admin_users_text(conn), kb_admin())
-        elif data == "adm_servers":
-            edit(chat, mid, admin_servers_text(conn), kb_admin())
-        elif data == "adm_active":
-            edit(chat, mid, admin_active_text(conn), kb_admin())
-        elif data == "adm_broadcast":
-            edit(chat, mid, "\U0001F4E3 <code>/broadcast TEXT</code>", kb_admin())
-        elif data == "adm_grant_help":
-            edit(chat, mid, "+ days\n<code>/grant ID DAYS</code>", kb_admin())
-        elif data == "adm_trial_help":
-            edit(chat, mid, "Trial\n<code>/trial ID</code>", kb_admin())
-        elif data == "adm_revoke_help":
-            edit(chat, mid, "Revoke\n<code>/revoke ID</code>", kb_admin())
+
+    if tg_id != ADMIN_ID:
         ans(cq["id"])
         return
+
+    if data == "adm_cancel":
+        clear_pending(tg_id)
+        open_admin(conn, chat, mid, lang)
+        ans(cq["id"], t(lang, "cancelled"))
+        return
+
+    if data == "adm_stats":
+        open_admin(conn, chat, mid, lang)
+        ans(cq["id"])
+        return
+    if data == "adm_users":
+        edit(chat, mid, admin_users_text(conn, lang), kb_admin(lang))
+        ans(cq["id"])
+        return
+    if data == "adm_servers":
+        edit(chat, mid, admin_servers_text(conn, lang), kb_admin(lang))
+        ans(cq["id"])
+        return
+    if data == "adm_active":
+        edit(chat, mid, admin_active_text(conn, lang), kb_admin(lang))
+        ans(cq["id"])
+        return
+
+    if data == "adm_grant_self":
+        edit(chat, mid, t(lang, "choose_days"), kb_days("gself", lang))
+        ans(cq["id"])
+        return
+
+    if data.startswith("gself_"):
+        days = int(data.split("_", 1)[1])
+        extend_subscription(conn, tg_id, days, status="premium")
+        user = get_user(conn, tg_id)
+        edit(
+            chat,
+            mid,
+            t(lang, "granted_self", days=days) + "\n\n" + status_text(user),
+            kb_admin(lang),
+        )
+        ans(cq["id"], "OK")
+        return
+
+    if data == "adm_grant_user":
+        PENDING[tg_id] = {"action": "grant_user_id"}
+        edit(chat, mid, t(lang, "ask_user_id"), kb_cancel(lang))
+        ans(cq["id"])
+        return
+
+    if data.startswith("guser_"):
+        # guser_<id>_<days>
+        parts = data.split("_")
+        if len(parts) == 3 and parts[1].isdigit():
+            uid = int(parts[1])
+            days = int(parts[2])
+            ensure_user(conn, uid)
+            extend_subscription(conn, uid, days, status="premium")
+            edit(chat, mid, t(lang, "granted", days=days, id=uid), kb_admin(lang))
+            try:
+                send(uid, t(lang_of(get_user(conn, uid) or user), "granted_self", days=days))
+            except Exception:
+                pass
+            ans(cq["id"], "OK")
+            return
+
+    if data == "adm_trial":
+        PENDING[tg_id] = {"action": "trial_user_id"}
+        edit(chat, mid, t(lang, "ask_user_id"), kb_cancel(lang))
+        ans(cq["id"])
+        return
+
+    if data == "adm_revoke":
+        PENDING[tg_id] = {"action": "revoke_user_id"}
+        edit(chat, mid, t(lang, "ask_user_id"), kb_cancel(lang))
+        ans(cq["id"])
+        return
+
+    if data == "adm_find":
+        PENDING[tg_id] = {"action": "find_user_id"}
+        edit(chat, mid, t(lang, "ask_user_id"), kb_cancel(lang))
+        ans(cq["id"])
+        return
+
+    if data == "adm_broadcast":
+        PENDING[tg_id] = {"action": "broadcast"}
+        edit(chat, mid, t(lang, "ask_broadcast"), kb_cancel(lang))
+        ans(cq["id"])
+        return
+
+    if data == "adm_add_srv":
+        PENDING[tg_id] = {"action": "add_srv_name"}
+        edit(chat, mid, t(lang, "ask_server_name"), kb_cancel(lang))
+        ans(cq["id"])
+        return
+
+    if data == "adm_del_srv":
+        markup, text = kb_delete_servers(conn, lang)
+        if not markup:
+            edit(chat, mid, text, kb_admin(lang))
+        else:
+            edit(chat, mid, text, markup)
+        ans(cq["id"])
+        return
+
+    if data.startswith("adel_"):
+        sid = data.split("_", 1)[1]
+        if sid.isdigit():
+            conn.run("delete from server_pool where id=:id", id=int(sid))
+            edit(chat, mid, t(lang, "server_deleted"), kb_admin(lang))
+            ans(cq["id"], "OK")
+            return
+
     ans(cq["id"])
+
+def handle_admin_text(conn, msg):
+    tg_id = msg["from"]["id"]
+    chat = msg["chat"]["id"]
+    text = (msg.get("text") or "").strip()
+    user = get_user(conn, tg_id) or ensure_user(conn, tg_id)
+    lang = lang_of(user)
+    pend = PENDING.get(tg_id) or {}
+    action = pend.get("action")
+    if not action:
+        return False
+
+    if action == "grant_user_id":
+        if not text.isdigit():
+            send(chat, t(lang, "ask_user_id"), kb_cancel(lang))
+            return True
+        uid = int(text)
+        PENDING[tg_id] = {"action": "grant_user_days", "uid": uid}
+        send(chat, t(lang, "choose_days"), kb_days("guser_" + str(uid), lang))
+        return True
+
+    if action == "trial_user_id":
+        if not text.isdigit():
+            send(chat, t(lang, "ask_user_id"), kb_cancel(lang))
+            return True
+        uid = int(text)
+        ensure_user(conn, uid)
+        exp = utcnow() + timedelta(days=7)
+        conn.run(
+            "update users set status='trial', trial_used=true, subscription_expires=:e where telegram_id=:id",
+            e=exp,
+            id=uid,
+        )
+        clear_pending(tg_id)
+        send(chat, t(lang, "trial_given", id=uid), kb_admin(lang))
+        return True
+
+    if action == "revoke_user_id":
+        if not text.isdigit():
+            send(chat, t(lang, "ask_user_id"), kb_cancel(lang))
+            return True
+        uid = int(text)
+        conn.run(
+            "update users set status='free', subscription_expires=null where telegram_id=:id",
+            id=uid,
+        )
+        clear_pending(tg_id)
+        send(chat, t(lang, "revoked", id=uid), kb_admin(lang))
+        return True
+
+    if action == "find_user_id":
+        if not text.isdigit():
+            send(chat, t(lang, "ask_user_id"), kb_cancel(lang))
+            return True
+        u = get_user(conn, int(text))
+        clear_pending(tg_id)
+        send(chat, status_text(u) if u else t(lang, "not_found"), kb_admin(lang))
+        return True
+
+    if action == "broadcast":
+        ids = [r[0] for r in conn.run("select telegram_id from users")]
+        ok = fail = 0
+        for i in ids:
+            try:
+                send(i, "📢 <b>" + BRAND + "</b>\n\n" + html_lib.escape(text))
+                ok += 1
+                time.sleep(0.04)
+            except Exception:
+                fail += 1
+        clear_pending(tg_id)
+        send(chat, t(lang, "broadcast_done", ok=ok, fail=fail), kb_admin(lang))
+        return True
+
+    if action == "add_srv_name":
+        PENDING[tg_id] = {"action": "add_srv_cfg", "name": text}
+        send(chat, t(lang, "ask_server_cfg"), kb_cancel(lang))
+        return True
+
+    if action == "add_srv_cfg":
+        name = pend.get("name") or "Server"
+        r = conn.run(
+            "insert into server_pool (raw_config, custom_name) values (:c, :n) returning id, custom_name",
+            c=text,
+            n=name,
+        )
+        clear_pending(tg_id)
+        send(
+            chat,
+            t(lang, "server_added", id=r[0][0], name=html_lib.escape(r[0][1])),
+            kb_admin(lang),
+        )
+        return True
+
+    return False
 
 def handle_cmd(conn, msg):
     text = (msg.get("text") or "").strip()
-    if not text.startswith("/"):
-        return
     tg_id = msg["from"]["id"]
+    if tg_id == ADMIN_ID and tg_id in PENDING:
+        if handle_admin_text(conn, msg):
+            return
+    if not text.startswith("/"):
+        if tg_id == ADMIN_ID and handle_admin_text(conn, msg):
+            return
+        return
     chat = msg["chat"]["id"]
     parts = text.split(maxsplit=1)
     cmd = parts[0].split("@")[0].lower()
@@ -632,108 +1092,14 @@ def handle_cmd(conn, msg):
     if cmd == "/menu":
         username, full_name = from_user_meta(msg.get("from") or {})
         user = ensure_user(conn, tg_id, username=username, full_name=full_name)
+        if not user.get("lang"):
+            send(chat, TEXTS["ru"]["choose_lang"], kb_lang())
+            return
         send(chat, status_text(user), kb_main(user))
         return
-    if tg_id != ADMIN_ID:
-        return
-    if cmd == "/admin":
-        send(chat, admin_stats_text(conn), kb_admin())
-        return
-    if cmd == "/add_server":
-        if "|||" not in args:
-            send(chat, "/add_server NAME|||config")
-            return
-        name, cfg = args.split("|||", 1)
-        name, cfg = name.strip(), cfg.strip()
-        if not name or not cfg:
-            send(chat, "empty")
-            return
-        r = conn.run(
-            "insert into server_pool (raw_config, custom_name) values (:c, :n) returning id, custom_name",
-            c=cfg,
-            n=name,
-        )
-        send(chat, "\u2705 #" + str(r[0][0]) + " " + html.escape(r[0][1]), kb_admin())
-        return
-    if cmd == "/delete_server":
-        if not args.isdigit():
-            send(chat, admin_servers_text(conn), kb_admin())
-            return
-        r = conn.run("delete from server_pool where id=:id returning id", id=int(args))
-        send(chat, "deleted" if r else "no", kb_admin())
-        return
-    if cmd == "/edit_name":
-        if "|||" not in args:
-            send(chat, "/edit_name ID|||NAME")
-            return
-        left, name = args.split("|||", 1)
-        if not left.strip().isdigit() or not name.strip():
-            send(chat, "bad")
-            return
-        r = conn.run(
-            "update server_pool set custom_name=:n where id=:id returning id",
-            n=name.strip(),
-            id=int(left.strip()),
-        )
-        send(chat, "ok" if r else "no", kb_admin())
-        return
-    if cmd == "/grant":
-        b = args.split()
-        if len(b) < 2 or not b[0].isdigit() or not b[1].isdigit():
-            send(chat, "/grant ID DAYS")
-            return
-        u = extend_subscription(conn, int(b[0]), int(b[1]), status="premium")
-        send(chat, "\u2705\n<code>" + html.escape(sub_link(u)) + "</code>", kb_admin())
-        try:
-            send(int(b[0]), "\U0001F48E Premium +" + b[1] + "d " + BRAND)
-        except Exception:
-            pass
-        return
-    if cmd == "/trial":
-        if not args.isdigit():
-            send(chat, "/trial ID")
-            return
-        tid = int(args)
-        ensure_user(conn, tid)
-        exp = utcnow() + timedelta(days=7)
-        conn.run(
-            "update users set status='trial', trial_used=true, subscription_expires=:e where telegram_id=:id",
-            e=exp,
-            id=tid,
-        )
-        send(chat, "trial ok", kb_admin())
-        return
-    if cmd == "/revoke":
-        if not args.isdigit():
-            send(chat, "/revoke ID")
-            return
-        conn.run(
-            "update users set status='free', subscription_expires=null where telegram_id=:id",
-            id=int(args),
-        )
-        send(chat, "revoked", kb_admin())
-        return
-    if cmd == "/find":
-        if not args.isdigit():
-            send(chat, "/find ID")
-            return
-        u = get_user(conn, int(args))
-        send(chat, status_text(u) if u else "no", kb_admin())
-        return
-    if cmd == "/broadcast":
-        if not args:
-            send(chat, "/broadcast TEXT")
-            return
-        ids = [r[0] for r in conn.run("select telegram_id from users")]
-        ok = fail = 0
-        for i in ids:
-            try:
-                send(i, "\U0001F4E2 <b>" + BRAND + "</b>\n\n" + html.escape(args))
-                ok += 1
-                time.sleep(0.05)
-            except Exception:
-                fail += 1
-        send(chat, "OK " + str(ok) + " / fail " + str(fail), kb_admin())
+    if tg_id == ADMIN_ID and cmd == "/admin":
+        user = get_user(conn, tg_id) or ensure_user(conn, tg_id)
+        send(chat, admin_stats_text(conn, lang_of(user)), kb_admin(lang_of(user)))
 
 def handle_pay(conn, msg):
     tg_id = msg["from"]["id"]
@@ -746,7 +1112,8 @@ def handle_pay(conn, msg):
         except Exception:
             days = PREMIUM_DAYS
     user = extend_subscription(conn, tg_id, days, status="premium")
-    send(chat, "\u2705 Premium on!\n\n" + status_text(user), kb_main(user))
+    lang = lang_of(user)
+    send(chat, t(lang, "pay_ok") + "\n\n" + status_text(user), kb_main(user))
 
 def process(conn, upd):
     if "pre_checkout_query" in upd:
@@ -790,140 +1157,112 @@ def render_denied():
     return (
         "<!DOCTYPE html><html lang=ru><head><meta charset=utf-8>"
         "<meta name=viewport content=\"width=device-width,initial-scale=1\">"
-        "<title>FluxVPN</title><style>"
-        "body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:Inter,system-ui,sans-serif;"
-        "color:#f8fafc;background:radial-gradient(900px 500px at 10% -10%,#7c3aed66,transparent),#07060f}"
-        ".card{width:min(520px,92vw);padding:32px;border-radius:28px;background:#12101ccc;border:1px solid #ffffff14}"
-        "h1{margin:0 0 10px;background:linear-gradient(90deg,#67e8f9,#a78bfa);-webkit-background-clip:text;color:transparent}"
-        "p{margin:0;color:#94a3b8;line-height:1.6}</style></head>"
-        "<body><div class=card><h1>FluxVPN</h1>"
-        "<p>Access denied. Activate Trial or Premium in the bot.</p></div></body></html>"
+        "<title>FluxVPN</title>"
+        "<style>"
+        "*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;"
+        "font-family:Inter,SF Pro Text,system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5}"
+        ".card{width:min(440px,92vw);padding:28px;border:1px solid #2a2a2a;border-radius:18px;background:#111}"
+        "h1{margin:0 0 8px;font-size:22px;font-weight:700;letter-spacing:.02em}"
+        "p{margin:0;color:#a3a3a3;line-height:1.55;font-size:14px}"
+        "</style></head><body><div class=card><h1>FluxVPN</h1>"
+        "<p>Подписка неактивна. Открой бота и активируй Trial или Premium.</p></div></body></html>"
     )
 
 def render_cabinet(user, servers):
     active = is_active(user["status"], user["subscription_expires"])
     left = days_left(user["subscription_expires"]) if active else 0
-    plan = html.escape(plan_label(user))
-    link = html.escape(sub_link(user) or "")
-    ref = html.escape(ref_link(user))
-    name = html.escape(display_name(user))
-    cards = []
+    until = fmt_until(user["subscription_expires"]) if active else "—"
+    link = sub_link(user) or ""
+    status_txt = "✅ Активна" if active else "❌ Неактивна"
+    rows = []
     for s in servers:
         flag = extract_flag(s[2])
-        title = html.escape(str(s[2]))
-        cards.append(
-            "<div class=server><div class=flag>"
+        title = html_lib.escape(str(s[2]))
+        rows.append(
+            "<div class=row><div class=left><span class=flag>"
             + flag
-            + "</div><div class=meta><div class=sname>"
+            + "</span><div><div class=name>"
             + title
-            + "</div><div class=stag>Node #"
+            + "</div><div class=meta>Node #"
             + str(s[0])
-            + "</div></div><div class=pill>Online</div></div>"
+            + "</div></div></div>"
+            + "<div class=ok>Online</div></div>"
         )
-    servers_html = "".join(cards) if cards else "<div class=empty>Servers coming soon</div>"
-    st = "Active" if active else "Inactive"
-    refs = str(int(user.get("referral_count") or 0))
-    nserv = str(len(servers))
-    bonus = str(REF_BONUS_DAYS)
+    servers_html = "".join(rows) if rows else "<div class=empty>Нет серверов</div>"
+    happ = "happ://add/" + urllib.parse.quote(link, safe="") if link else "#"
     css = (
-        "*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;color:#f8fafc;"
-        "background:radial-gradient(1000px 500px at 0% -10%,#22d3ee33,transparent 60%),"
-        "radial-gradient(900px 500px at 100% 0%,#a78bfa44,transparent 55%),#07060f}"
-        ".wrap{width:min(1100px,94vw);margin:0 auto;padding:28px 0 60px}"
-        ".top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:22px;border-radius:28px;"
-        "border:1px solid rgba(255,255,255,.08);background:linear-gradient(135deg,rgba(34,211,238,.12),rgba(167,139,250,.14));"
-        "box-shadow:0 24px 80px #0007}"
-        ".brand{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#e2e8f0aa}"
-        "h1{margin:8px 0 6px;font-size:clamp(28px,5vw,40px);background:linear-gradient(90deg,#fff,#a5f3fc,#ddd6fe);"
-        "-webkit-background-clip:text;color:transparent}"
-        ".sub{margin:0;color:#94a3b8;max-width:60ch;line-height:1.55}"
-        ".badge{display:inline-flex;gap:8px;align-items:center;padding:8px 12px;border-radius:999px;background:#0006;"
-        "border:1px solid rgba(255,255,255,.08);font-size:12px}"
-        ".dot{width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 16px #34d399}"
-        ".stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}"
-        ".stat{padding:16px;border-radius:20px;background:rgba(8,7,16,.72);border:1px solid rgba(255,255,255,.08)}"
-        ".stat span{display:block;color:#94a3b8;font-size:12px}.stat b{display:block;margin-top:6px;font-size:22px}"
-        ".tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 14px}"
-        ".tab{border:1px solid rgba(255,255,255,.08);background:#0d0b16cc;color:#e2e8f0;padding:10px 14px;"
-        "border-radius:999px;cursor:pointer;font-weight:600}"
-        ".tab.active{background:linear-gradient(90deg,#0891b2,#7c3aed);border-color:transparent}"
-        ".panel{display:none;padding:18px;border-radius:24px;background:#0c0b14f2;border:1px solid rgba(255,255,255,.08)}"
-        ".panel.active{display:block}"
-        ".server{display:flex;align-items:center;gap:12px;padding:14px;border-radius:18px;background:#0a0912;"
-        "border:1px solid rgba(255,255,255,.08);margin-bottom:10px}"
-        ".flag{width:46px;height:46px;border-radius:16px;display:grid;place-items:center;font-size:24px;"
-        "background:linear-gradient(135deg,#22d3ee33,#a78bfa33)}"
-        ".sname{font-weight:700}.stag{color:#94a3b8;font-size:12px;margin-top:2px}"
-        ".pill{margin-left:auto;font-size:11px;padding:6px 10px;border-radius:999px;background:#063;color:#bbf7d0}"
-        ".box{padding:14px;border-radius:16px;background:#0006;border:1px solid rgba(255,255,255,.08);word-break:break-all;"
-        "font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#cbd5e1}"
-        ".btn{display:inline-flex;margin-top:12px;padding:12px 16px;border-radius:14px;"
-        "background:linear-gradient(90deg,#06b6d4,#8b5cf6);color:#fff;border:0;cursor:pointer;font-weight:700}"
-        ".note{color:#94a3b8;font-size:13px;line-height:1.6;margin-top:12px}.empty{color:#94a3b8;padding:20px 8px}"
-        "@media(max-width:800px){.stats{grid-template-columns:1fr 1fr}}"
-        "@media(max-width:520px){.stats{grid-template-columns:1fr}}"
-    )
-    js = (
-        "const tabs=[...document.querySelectorAll('.tab')];"
-        "const panels=[...document.querySelectorAll('.panel')];"
-        "tabs.forEach(t=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.remove('active'));"
-        "panels.forEach(x=>x.classList.remove('active'));t.classList.add('active');"
-        "document.getElementById(t.dataset.tab).classList.add('active');}));"
+        "*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}"
+        "body{margin:0;font-family:Inter,SF Pro Text,system-ui,sans-serif;background:#0a0a0a;color:#f5f5f5}"
+        ".wrap{width:min(720px,100%);margin:0 auto;padding:20px 16px 48px}"
+        ".top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}"
+        ".logo{font-weight:800;letter-spacing:.08em;font-size:14px;text-transform:uppercase}"
+        ".pill{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid #2f2f2f;color:#d4d4d4;background:#121212}"
+        ".card{background:#111;border:1px solid #242424;border-radius:18px;padding:16px;margin-bottom:12px}"
+        ".title{margin:0 0 12px;font-size:16px;font-weight:700}"
+        ".grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}"
+        ".box{background:#0d0d0d;border:1px solid #232323;border-radius:14px;padding:12px}"
+        ".label{color:#8a8a8a;font-size:12px;margin-bottom:6px}"
+        ".val{font-size:18px;font-weight:700}"
+        ".sub{color:#a3a3a3;font-size:12px;margin-top:4px}"
+        ".linkbox{word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"
+        "font-size:12px;line-height:1.5;color:#e5e5e5;background:#0d0d0d;border:1px solid #232323;"
+        "border-radius:14px;padding:12px}"
+        ".actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}"
+        ".btn{display:flex;align-items:center;justify-content:center;text-decoration:none;color:#0a0a0a;"
+        "background:#f5f5f5;border:0;border-radius:12px;padding:12px 10px;font-weight:700;font-size:13px;cursor:pointer}"
+        ".btn.secondary{background:transparent;color:#f5f5f5;border:1px solid #333}"
+        ".row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid #1d1d1d}"
+        ".row:last-child{border-bottom:0}"
+        ".left{display:flex;gap:10px;align-items:center;min-width:0}"
+        ".flag{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#171717;border:1px solid #2a2a2a}"
+        ".name{font-weight:650;font-size:14px}.meta{color:#8a8a8a;font-size:11px;margin-top:2px}"
+        ".ok{color:#d4d4d4;font-size:12px;border:1px solid #2a2a2a;border-radius:999px;padding:5px 8px}"
+        ".note{color:#8a8a8a;font-size:12px;line-height:1.55;margin:0}"
+        ".empty{color:#8a8a8a;padding:8px 0}"
+        "@media(max-width:560px){.grid,.actions{grid-template-columns:1fr}}"
     )
     return (
         "<!DOCTYPE html><html lang=ru><head><meta charset=utf-8>"
-        "<meta name=viewport content=\"width=device-width,initial-scale=1\">"
-        "<title>FluxVPN Cabinet</title><style>"
+        "<meta name=viewport content=\"width=device-width,initial-scale=1,viewport-fit=cover\">"
+        "<title>FluxVPN Subscription</title><style>"
         + css
         + "</style></head><body><div class=wrap>"
-        "<div class=top><div><div class=brand>FLUXVPN PRIVATE ACCESS</div>"
-        "<h1>Cabinet</h1>"
-        "<p class=sub>Hi, "
-        + name
-        + ". Manage plan and locations. Raw vless/ss strings are hidden here.</p></div>"
-        "<div class=badge><span class=dot></span> "
-        + st
+        "<div class=top><div class=logo>FluxVPN</div>"
+        "<div class=pill>Subscription</div></div>"
+        "<div class=card><div class=title>Статус подписки</div>"
+        "<div class=grid>"
+        "<div class=box><div class=label>Статус</div><div class=val>"
+        + status_txt
         + "</div></div>"
-        "<div class=stats>"
-        "<div class=stat><span>Plan</span><b>"
-        + plan
-        + "</b></div>"
-        "<div class=stat><span>Days</span><b>"
+        "<div class=box><div class=label>Осталось</div><div class=val>"
         + str(left)
-        + "</b></div>"
-        "<div class=stat><span>Servers</span><b>"
-        + nserv
-        + "</b></div>"
-        "<div class=stat><span>Referrals</span><b>"
-        + refs
-        + "</b></div></div>"
-        "<div class=tabs>"
-        "<button class=\"tab active\" data-tab=overview>Overview</button>"
-        "<button class=tab data-tab=servers>Servers</button>"
-        "<button class=tab data-tab=sub>Subscription</button>"
-        "<button class=tab data-tab=ref>Referral</button></div>"
-        "<div id=overview class=\"panel active\"><h3>How to connect</h3>"
-        "<p class=note>1. Copy subscription URL.<br>2. Paste into Happ / Hiddify / v2rayNG.<br>"
-        "3. Refresh subscription.<br><br>Cabinet shows locations only, not raw configs.</p></div>"
-        "<div id=servers class=panel><h3>Locations</h3>"
+        + " дн.</div></div>"
+        "<div class=box><div class=label>Активна до</div><div class=val style=\"font-size:14px\">"
+        + html_lib.escape(until)
+        + "</div><div class=sub>"
+        + ("активна" if active else "нет доступа")
+        + "</div></div>"
+        "<div class=box><div class=label>Серверов</div><div class=val>"
+        + str(len(servers))
+        + "</div></div></div></div>"
+        "<div class=card><div class=title>Быстрый импорт</div>"
+        "<div class=actions>"
+        "<a class=btn href=\""
+        + html_lib.escape(happ)
+        + "\">Happ</a>"
+        "<button class=\"btn secondary\" onclick=\"navigator.clipboard.writeText(document.getElementById(\x27sub\x27).innerText)\">Скопировать</button>"
+        "</div>"
+        "<p class=note style=\"margin-top:12px\">Если кнопки не сработали — скопируй ссылку вручную и вставь в клиент как subscription URL.</p></div>"
+        "<div class=card><div class=title>Ссылка подписки</div>"
+        "<div class=linkbox id=sub>"
+        + html_lib.escape(link)
+        + "</div></div>"
+        "<div class=card><div class=title>Серверы</div>"
         + servers_html
         + "</div>"
-        "<div id=sub class=panel><h3>Subscription URL</h3><div class=box id=suburl>"
-        + link
-        + "</div>"
-        "<button class=btn onclick=\"navigator.clipboard.writeText(document.getElementById('suburl').innerText)\">Copy</button>"
-        "<p class=note>Browser = cabinet. VPN client = config list.</p></div>"
-        "<div id=ref class=panel><h3>Referral</h3>"
-        "<p class=note>Each friend = +"
-        + bonus
-        + " days.</p>"
-        "<div class=box id=refurl>"
-        + ref
-        + "</div>"
-        "<button class=btn onclick=\"navigator.clipboard.writeText(document.getElementById('refurl').innerText)\">Copy ref</button></div>"
-        "</div><script>"
-        + js
-        + "</script></body></html>"
+        "<div class=card><p class=note>При медленной работе обнови подписку внутри VPN-клиента. "
+        "Сырые vless/ss строки в кабинете скрыты — конфиги получает только клиент.</p></div>"
+        "</div></body></html>"
     )
 
 class Handler(BaseHTTPRequestHandler):
