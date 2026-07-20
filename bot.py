@@ -50,36 +50,39 @@ USER_SELECT = (
 TEXTS = {
     "ru": {
         "choose_lang": "Выбери язык / Choose language",
-        "welcome": "Добро пожаловать в <b>{brand}</b>\nПремиальный VPN с личным кабинетом.",
-        "welcome_ref": "Тебя пригласили в <b>{brand}</b> по реферальной ссылке.\nСпасибо, что с нами!",
-        "status_title": "⚡ <b>{brand}</b>",
-        "plan": "📦 План: <b>{plan}</b>",
-        "days": "⏳ Осталось: <b>{days} дн.</b>",
-        "inactive": "⏳ Подписка не активна",
-        "refs": "🎁 Рефералы: <b>{n}</b> (+{bonus} дн. за друга)",
+        "welcome": "<b>{brand}</b>\nЧистый доступ. Без лишнего.",
+        "welcome_ref": "Тебя пригласили в <b>{brand}</b>.\nДобро пожаловать.",
+        "status_title": "<b>{brand}</b>",
+        "plan": "План · <b>{plan}</b>",
+        "days": "Осталось · <b>{days} дн.</b>",
+        "inactive": "Статус · <b>неактивна</b>",
+        "refs": "Рефералы · <b>{n}</b>  ·  +{bonus} дн. за друга",
         "sub": "🔗 Ссылка подписки:",
         "ref_link": "🤝 Твоя реф-ссылка:",
-        "trial_avail": "✨ Доступен бесплатный триал на 7 дней.",
-        "need_premium": "💎 Оформи Premium, чтобы открыть доступ.",
-        "btn_trial": "✨ Триал 7 дней",
-        "btn_buy": "💎 Купить Premium",
-        "btn_status": "📊 Статус",
-        "btn_ref": "🎁 Рефералка",
-        "btn_servers": "🛰 Серверы",
-        "btn_cab": "🖥 Кабинет",
-        "btn_admin": "🛠 Админка",
-        "btn_back": "⬅️ Назад",
-        "trial_ok": "✅ Триал на 7 дней активирован!",
+        "trial_avail": "Доступен пробный период 7 дней.",
+        "need_premium": "Нужен Premium для доступа.",
+        "btn_trial": "Триал 7 дней",
+        "btn_buy": "Premium",
+        "btn_status": "Статус",
+        "btn_ref": "Рефералка",
+        "btn_servers": "Серверы",
+        "btn_cab": "Кабинет",
+        "btn_copy_key": "Скопировать ключ",
+        "btn_copy_ref": "Скопировать реф",
+        "copied_hint": "Готово. Вставь ключ в VPN-клиент как subscription.",
+        "btn_admin": "Админ",
+        "btn_back": "Назад",
+        "trial_ok": "Триал активирован на 7 дней.",
         "trial_used": "Триал уже использован",
         "already": "Подписка уже активна",
         "need_sub": "Нужна активная подписка",
-        "servers_title": "🛰 <b>Серверы {brand}</b>",
+        "servers_title": "<b>Серверы</b>",
         "servers_empty": "Пока нет серверов.",
-        "servers_note": "Конфиги подтягиваются автоматически по subscription-ссылке в клиенте.",
-        "ref_title": "🎁 <b>Реферальная программа</b>",
-        "ref_body": "Приглашай друзей.\nЗа каждого нового — <b>+{bonus} дней</b>.\nПриглашено: <b>{n}</b>",
-        "ref_bonus_inviter": "🎉 <b>Реферальный бонус!</b>\nПо твоей ссылке зарегистрировался новый пользователь.\n+{bonus} дней к подписке {brand}.",
-        "pay_ok": "✅ Оплата прошла! Premium активирован.",
+        "servers_note": "Ключ подписки — кнопкой ниже.",
+        "ref_title": "<b>Рефералка</b>",
+        "ref_body": "+{bonus} дней за каждого друга.\nПриглашено: <b>{n}</b>",
+        "ref_bonus_inviter": "Реферальный бонус: +{bonus} дн. ({brand})",
+        "pay_ok": "Premium активирован.",
         "admin_title": "🛠 <b>Админка {brand}</b>",
         "admin_stats": "👥 Юзеров: <b>{total}</b>\n🟢 Активных: <b>{active}</b>\n💎 Premium: <b>{premium}</b>\n✨ Trial: <b>{trial}</b>\n🎁 Рефов: <b>{refs}</b>\n🛰 Серверов: <b>{servers}</b>",
         "adm_stats": "📈 Статистика",
@@ -123,36 +126,39 @@ TEXTS = {
     },
     "en": {
         "choose_lang": "Choose language / Выбери язык",
-        "welcome": "Welcome to <b>{brand}</b>\nPremium VPN with personal cabinet.",
-        "welcome_ref": "You joined <b>{brand}</b> via a referral link.\nGlad to have you!",
-        "status_title": "⚡ <b>{brand}</b>",
-        "plan": "📦 Plan: <b>{plan}</b>",
-        "days": "⏳ Left: <b>{days} d</b>",
-        "inactive": "⏳ Subscription inactive",
-        "refs": "🎁 Referrals: <b>{n}</b> (+{bonus}d each)",
+        "welcome": "<b>{brand}</b>\nClean access. Nothing extra.",
+        "welcome_ref": "You were invited to <b>{brand}</b>.\nWelcome.",
+        "status_title": "<b>{brand}</b>",
+        "plan": "Plan · <b>{plan}</b>",
+        "days": "Left · <b>{days} d</b>",
+        "inactive": "Status · <b>inactive</b>",
+        "refs": "Referrals · <b>{n}</b>  ·  +{bonus}d each",
         "sub": "🔗 Subscription link:",
         "ref_link": "🤝 Your referral link:",
-        "trial_avail": "✨ Free 7-day trial available.",
-        "need_premium": "💎 Get Premium to open access.",
-        "btn_trial": "✨ Trial 7 days",
-        "btn_buy": "💎 Buy Premium",
-        "btn_status": "📊 Status",
-        "btn_ref": "🎁 Referral",
-        "btn_servers": "🛰 Servers",
-        "btn_cab": "🖥 Cabinet",
-        "btn_admin": "🛠 Admin",
-        "btn_back": "⬅️ Back",
-        "trial_ok": "✅ 7-day trial activated!",
+        "trial_avail": "7-day trial available.",
+        "need_premium": "Premium required.",
+        "btn_trial": "Trial 7 days",
+        "btn_buy": "Premium",
+        "btn_status": "Status",
+        "btn_ref": "Referral",
+        "btn_servers": "Servers",
+        "btn_cab": "Cabinet",
+        "btn_copy_key": "Copy key",
+        "btn_copy_ref": "Copy referral",
+        "copied_hint": "Done. Paste the key into your VPN client as subscription.",
+        "btn_admin": "Admin",
+        "btn_back": "Back",
+        "trial_ok": "Trial activated for 7 days.",
         "trial_used": "Trial already used",
         "already": "Already active",
         "need_sub": "Active subscription required",
-        "servers_title": "🛰 <b>{brand} servers</b>",
+        "servers_title": "<b>Servers</b>",
         "servers_empty": "No servers yet.",
-        "servers_note": "Configs are pulled automatically via subscription URL in the client.",
-        "ref_title": "🎁 <b>Referral program</b>",
-        "ref_body": "Invite friends.\nEach new user = <b>+{bonus} days</b>.\nInvited: <b>{n}</b>",
-        "ref_bonus_inviter": "🎉 <b>Referral bonus!</b>\nSomeone joined with your link.\n+{bonus} days on {brand}.",
-        "pay_ok": "✅ Payment ok! Premium activated.",
+        "servers_note": "Use the key button below.",
+        "ref_title": "<b>Referral</b>",
+        "ref_body": "+{bonus} days per friend.\nInvited: <b>{n}</b>",
+        "ref_bonus_inviter": "Referral bonus: +{bonus}d ({brand})",
+        "pay_ok": "Premium activated.",
         "admin_title": "🛠 <b>{brand} Admin</b>",
         "admin_stats": "👥 Users: <b>{total}</b>\n🟢 Active: <b>{active}</b>\n💎 Premium: <b>{premium}</b>\n✨ Trial: <b>{trial}</b>\n🎁 Refs: <b>{refs}</b>\n🛰 Servers: <b>{servers}</b>",
         "adm_stats": "📈 Stats",
@@ -377,31 +383,23 @@ def lang_of(user):
 
 def status_text(user):
     lang = lang_of(user)
-    link = sub_link(user)
     active = is_active(user["status"], user["subscription_expires"])
     lines = [
         t(lang, "status_title", brand=BRAND),
         "",
-        "👤 " + html_lib.escape(display_name(user)),
+        html_lib.escape(display_name(user)),
         t(lang, "plan", plan=plan_label(user, lang)),
     ]
     if active:
         lines.append(t(lang, "days", days=days_left(user["subscription_expires"])))
     else:
         lines.append(t(lang, "inactive"))
-    lines.append(
-        t(lang, "refs", n=user.get("referral_count") or 0, bonus=REF_BONUS_DAYS)
-    )
-    if link:
-        lines.extend(["", t(lang, "sub"), "<code>" + html_lib.escape(link) + "</code>"])
-    lines.extend(
-        ["", t(lang, "ref_link"), "<code>" + html_lib.escape(ref_link(user)) + "</code>"]
-    )
+    lines.append(t(lang, "refs", n=user.get("referral_count") or 0, bonus=REF_BONUS_DAYS))
     if not active and not user["trial_used"]:
         lines.extend(["", t(lang, "trial_avail")])
     elif not active:
         lines.extend(["", t(lang, "need_premium")])
-    return "\n".join(lines)
+    return chr(10).join(lines)
 
 def kb_lang():
     return {
@@ -417,23 +415,54 @@ def kb_main(user):
     lang = lang_of(user)
     rows = []
     active = is_active(user["status"], user["subscription_expires"])
+    link = sub_link(user)
+    rlink = ref_link(user)
+
     if (not user["trial_used"]) and (not active):
         rows.append([{"text": t(lang, "btn_trial"), "callback_data": "trial"}])
     rows.append([{"text": t(lang, "btn_buy"), "callback_data": "buy"}])
-    rows.append(
-        [
-            {"text": t(lang, "btn_status"), "callback_data": "mysub"},
-            {"text": t(lang, "btn_ref"), "callback_data": "referral"},
-        ]
-    )
+
+    row2 = [{"text": t(lang, "btn_status"), "callback_data": "mysub"}]
     if active:
-        rows.append([{"text": t(lang, "btn_servers"), "callback_data": "servers"}])
-    link = sub_link(user)
-    if link:
-        rows.append([{"text": t(lang, "btn_cab"), "url": link}])
-    rows.append([{"text": "🌐 EN/RU", "callback_data": "lang_menu"}])
+        row2.append({"text": t(lang, "btn_servers"), "callback_data": "servers"})
+    rows.append(row2)
+
+    actions = []
+    if link and active:
+        actions.append({"text": t(lang, "btn_copy_key"), "copy_text": {"text": link}})
+        actions.append({"text": t(lang, "btn_cab"), "url": link})
+    if actions:
+        rows.append(actions)
+
+    ref_row = [{"text": t(lang, "btn_ref"), "callback_data": "referral"}]
+    if rlink:
+        ref_row.append({"text": t(lang, "btn_copy_ref"), "copy_text": {"text": rlink}})
+    rows.append(ref_row)
+
+    rows.append([{"text": "EN / RU", "callback_data": "lang_menu"}])
     if user["telegram_id"] == ADMIN_ID:
         rows.append([{"text": t(lang, "btn_admin"), "callback_data": "admin"}])
+    return {"inline_keyboard": rows}
+
+def kb_ref(user):
+    lang = lang_of(user)
+    rlink = ref_link(user)
+    rows = []
+    if rlink:
+        rows.append([{"text": t(lang, "btn_copy_ref"), "copy_text": {"text": rlink}}])
+    rows.append([{"text": t(lang, "btn_back"), "callback_data": "mysub"}])
+    return {"inline_keyboard": rows}
+
+def kb_servers(user):
+    lang = lang_of(user)
+    link = sub_link(user)
+    rows = []
+    if link:
+        rows.append([
+            {"text": t(lang, "btn_copy_key"), "copy_text": {"text": link}},
+            {"text": t(lang, "btn_cab"), "url": link},
+        ])
+    rows.append([{"text": t(lang, "btn_back"), "callback_data": "mysub"}])
     return {"inline_keyboard": rows}
 
 def kb_cancel(lang):
@@ -800,13 +829,10 @@ def handle_cb(conn, cq):
     if data == "referral":
         text = (
             t(lang, "ref_title")
-            + "\n\n"
+            + chr(10) + chr(10)
             + t(lang, "ref_body", bonus=REF_BONUS_DAYS, n=user.get("referral_count") or 0)
-            + "\n\n<code>"
-            + html_lib.escape(ref_link(user))
-            + "</code>"
         )
-        edit(chat, mid, text, kb_main(user))
+        edit(chat, mid, text, kb_ref(user))
         ans(cq["id"])
         return
 
@@ -848,7 +874,7 @@ def handle_cb(conn, cq):
         if not is_active(user["status"], user["subscription_expires"]):
             ans(cq["id"], t(lang, "need_sub"), True)
             return
-        edit(chat, mid, servers_list_text(conn, lang), kb_main(user))
+        edit(chat, mid, servers_list_text(conn, lang), kb_servers(user))
         ans(cq["id"])
         return
 
