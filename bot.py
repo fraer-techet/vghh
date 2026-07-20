@@ -1,7 +1,10 @@
+
 import json
 import os
+import sys
 import threading
 import time
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -10,14 +13,26 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pg8000.native
 
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-DATABASE_URL = os.environ["DATABASE_URL"]
-ADMIN_ID = int(os.environ.get("ADMIN_ID", "6049379160"))
-PREMIUM_DAYS = int(os.environ.get("PREMIUM_DAYS", "30"))
-PREMIUM_STARS = int(os.environ.get("PREMIUM_STARS", "150"))
-PORT = int(os.environ.get("PORT", "10000"))
-PUBLIC_URL = (os.environ.get("PUBLIC_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").rstrip("/")
+def env(name, default=""):
+    return os.environ.get(name, default)
+
+BOT_TOKEN = env("BOT_TOKEN")
+DATABASE_URL = env("DATABASE_URL")
+ADMIN_ID = int(env("ADMIN_ID", "6049379160") or "6049379160")
+PREMIUM_DAYS = int(env("PREMIUM_DAYS", "30") or "30")
+PREMIUM_STARS = int(env("PREMIUM_STARS", "150") or "150")
+PORT = int(env("PORT", "10000") or "10000")
+PUBLIC_URL = (env("PUBLIC_URL") or env("RENDER_EXTERNAL_URL") or "").rstrip("/")
+
+if not BOT_TOKEN:
+    print("FATAL: BOT_TOKEN missing", flush=True)
+    sys.exit(1)
+if not DATABASE_URL:
+    print("FATAL: DATABASE_URL missing", flush=True)
+    sys.exit(1)
+
 API = "ht" + "tps://api.telegram.org/bot" + BOT_TOKEN
+print("boot PORT=", PORT, "PUBLIC_URL=", PUBLIC_URL, flush=True)
 
 
 def utcnow():
@@ -100,7 +115,7 @@ def ensure_user(conn, tg_id):
 def sub_link(user):
     base = PUBLIC_URL
     if not base:
-        return "(ссылка появится после деплоя, задай PUBLIC_URL)"
+        return "(нет PUBLIC_URL/RENDER_EXTERNAL_URL)"
     return base + "/sub/" + user["sub_token"]
 
 
@@ -112,7 +127,7 @@ def status_text(user):
             "Статус: <b>" + kind + "</b>\n"
             "Дней осталось: <b>" + str(days_left(user["subscription_expires"])) + "</b>\n"
             "Ссылка подписки:\n<code>" + link + "</code>\n\n"
-            "Вставь её в Hiddify / v2rayNG как subscription URL."
+            "Вставь её в Hiddify / Happ / v2rayNG как subscription URL."
         )
     trial = "Триал доступен." if not user["trial_used"] else "Триал уже использован."
     return "Статус: <b>нет подписки</b>\n" + trial + "\nСсылка:\n<code>" + link + "</code>"
@@ -180,10 +195,7 @@ def servers_text(conn):
     rows = get_servers(conn)
     if not rows:
         return "Пул серверов пуст."
-    lines = []
-    for r in rows:
-        lines.append(brand(r[1], r[2]))
-    return "\n".join(lines)
+    return "\n".join(brand(r[1], r[2]) for r in rows)
 
 
 def activate_premium(conn, tg_id, days):
@@ -211,7 +223,7 @@ def handle_start(conn, msg):
     user = ensure_user(conn, tg_id)
     text = "VPN бот готов.\n\n" + status_text(user)
     if tg_id == ADMIN_ID:
-        text += "\n\nАдмин: /add_server /delete_server /edit_name /grant /admin"
+        text += "\n\nАдмин: /add_server /delete_server /edit_name /grant"
     send(chat, text, kb_main(user))
 
 
@@ -222,7 +234,7 @@ def handle_cb(conn, cq):
     mid = cq["message"]["message_id"]
     user = ensure_user(conn, tg_id)
 
-    if data in ("mysub",):
+    if data == "mysub":
         edit(chat, mid, status_text(user), kb_main(user))
         ans(cq["id"])
         return
@@ -288,12 +300,6 @@ def handle_cmd(conn, msg):
         return
 
     if tg_id != ADMIN_ID:
-        return
-
-    if cmd == "/admin":
-        rows = get_servers(conn)
-        t = "Серверов: " + str(len(rows))
-        send(chat, t)
         return
 
     if cmd == "/add_server":
@@ -382,14 +388,18 @@ def is_browser(ua):
     s = (ua or "").lower()
     if not s:
         return False
-    for m in ("v2ray", "clash", "hiddify", "streisand", "shadowrocket", "nekobox", "sing-box"):
+    for m in ("v2ray", "clash", "hiddify", "streisand", "shadowrocket", "nekobox", "sing-box", "happ"):
         if m in s:
             return False
     return ("mozilla" in s) or ("chrome" in s) or ("safari" in s)
 
 
 def html_denied():
-    return "<!doctype html><meta charset=utf-8><body style='background:#111;color:#eee;font-family:sans-serif;display:grid;place-items:center;height:100vh'><div><h1>Доступ закрыт</h1><p>Активируй триал или Premium в боте.</p></div>"
+    return (
+        "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+        "<body style='margin:0;background:#0b0a12;color:#f8fafc;font-family:sans-serif;display:grid;place-items:center;min-height:100vh'>"
+        "<div style='padding:24px'><h1>Доступ закрыт</h1><p>Активируй триал или Premium в боте.</p></div></body>"
+    )
 
 
 def html_cab(user, servers):
@@ -401,7 +411,7 @@ def html_cab(user, servers):
         cfg = brand(s[1], s[2])
         cards += (
             "<div style='background:#1a1328;border:1px solid #333;border-radius:16px;padding:14px;margin:10px 0'>"
-            "<b>" + name + "</b><pre style='white-space:pre-wrap;word-break:break-all;font-size:11px'>"
+            "<b>" + str(name) + "</b><pre style='white-space:pre-wrap;word-break:break-all;font-size:11px'>"
             + cfg.replace("&", "&amp;").replace("<", "&lt;")
             + "</pre></div>"
         )
@@ -411,16 +421,16 @@ def html_cab(user, servers):
         "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
         "<body style='margin:0;background:radial-gradient(circle at top,#4c1d95,#0a0a0f);color:#f8fafc;font-family:sans-serif'>"
         "<div style='max-width:900px;margin:0 auto;padding:28px 16px'>"
-        "<h1 style='background:linear-gradient(90deg,#e879f9,#a78bfa);-webkit-background-clip:text;color:transparent'>Личный кабинет</h1>"
+        "<h1>Личный кабинет</h1>"
         "<p>План: <b>" + kind + "</b> · Дней: <b>" + str(left) + "</b> · Нод: <b>" + str(len(servers)) + "</b></p>"
         + cards
-        + "</div>"
+        + "</div></body>"
     )
 
 
 class Handler(BaseHTTPRequestHandler):
-    def log_message(self, *args):
-        return
+    def log_message(self, fmt, *args):
+        print("http", self.address_string(), fmt % args, flush=True)
 
     def _send(self, code, ctype, body):
         data = body.encode("utf-8") if isinstance(body, str) else body
@@ -432,55 +442,59 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        path = urllib.parse.urlparse(self.path).path
-        if path in ("/", "/health"):
-            self._send(200, "text/plain; charset=utf-8", "ok")
-            return
-        if path.startswith("/sub/"):
-            token = path.split("/sub/", 1)[1].strip("/")
-            if not token:
-                self._send(400, "text/plain; charset=utf-8", "missing token")
+        try:
+            path = urllib.parse.urlparse(self.path).path
+            if path in ("/", "/health", "/favicon.ico"):
+                self._send(200, "text/plain; charset=utf-8", "ok")
                 return
-            conn = db()
-            try:
-                rows = conn.run(
-                    "select telegram_id, status, trial_used, subscription_expires, sub_token from users where sub_token=:t limit 1",
-                    t=token,
-                )
-                if not rows:
-                    user = None
-                else:
-                    user = user_row(rows[0])
-                if (not user) or (not is_active(user["status"], user["subscription_expires"])):
+            if path.startswith("/sub/"):
+                token = path.split("/sub/", 1)[1].strip("/")
+                if not token:
+                    self._send(400, "text/plain; charset=utf-8", "missing token")
+                    return
+                conn = db()
+                try:
+                    rows = conn.run(
+                        "select telegram_id, status, trial_used, subscription_expires, sub_token from users where sub_token=:t limit 1",
+                        t=token,
+                    )
+                    user = user_row(rows[0]) if rows else None
+                    if (not user) or (not is_active(user["status"], user["subscription_expires"])):
+                        if is_browser(self.headers.get("User-Agent")):
+                            self._send(403, "text/html; charset=utf-8", html_denied())
+                        else:
+                            self._send(403, "text/plain; charset=utf-8", "subscription inactive")
+                        return
+                    servers = get_servers(conn)
                     if is_browser(self.headers.get("User-Agent")):
-                        self._send(403, "text/html; charset=utf-8", html_denied())
-                    else:
-                        self._send(403, "text/plain; charset=utf-8", "subscription inactive")
-                    return
-                servers = get_servers(conn)
-                if is_browser(self.headers.get("User-Agent")):
-                    self._send(200, "text/html; charset=utf-8", html_cab(user, servers))
-                    return
-                lines = [brand(s[1], s[2]) for s in servers if brand(s[1], s[2])]
-                body = "\n".join(lines) + ("\n" if lines else "")
-                self._send(200, "text/plain; charset=utf-8", body)
-            finally:
-                conn.close()
-            return
-        self._send(404, "text/plain; charset=utf-8", "not found")
+                        self._send(200, "text/html; charset=utf-8", html_cab(user, servers))
+                        return
+                    lines = [brand(s[1], s[2]) for s in servers if brand(s[1], s[2])]
+                    body = "\n".join(lines) + ("\n" if lines else "")
+                    self._send(200, "text/plain; charset=utf-8", body)
+                finally:
+                    conn.close()
+                return
+            self._send(404, "text/plain; charset=utf-8", "not found: " + path)
+        except Exception:
+            print("http error", traceback.format_exc(), flush=True)
+            self._send(500, "text/plain; charset=utf-8", "server error")
 
 
 def start_http():
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
-    print("http on", PORT, flush=True)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    print("HTTP listening 0.0.0.0:" + str(PORT), flush=True)
 
 
 def main():
-    print("starting bot", flush=True)
+    print("starting", flush=True)
     start_http()
+    time.sleep(0.2)
     try:
         api("deleteWebhook", {"drop_pending_updates": False})
+        print("webhook cleared", flush=True)
     except Exception as e:
         print("deleteWebhook", e, flush=True)
     offset = 0
@@ -501,12 +515,12 @@ def main():
                     offset = u["update_id"] + 1
                     try:
                         process(conn, u)
-                    except Exception as e:
-                        print("upd", e, flush=True)
+                    except Exception:
+                        print("upd", traceback.format_exc(), flush=True)
             finally:
                 conn.close()
-        except Exception as e:
-            print("loop", e, flush=True)
+        except Exception:
+            print("loop", traceback.format_exc(), flush=True)
             time.sleep(3)
 
 
