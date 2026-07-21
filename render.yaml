@@ -22,3 +22,5 @@ services:
         value: "30"
       - key: PREMIUM_STARS
         value: "150"
+      - key: CRYPTO_BOT_TOKEN
+        value: "599850:AA21TXJWkZO0aZT8DZFbB6NIwdj6jtKZ3YB"

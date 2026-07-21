@@ -30,6 +30,9 @@ BOT_TOKEN = env("BOT_TOKEN")
 DATABASE_URL = env("DATABASE_URL")
 ADMIN_ID = int(env("ADMIN_ID", "6049379160") or "6049379160")
 ADMIN_USERNAME = (env("ADMIN_USERNAME", "zrdws") or "zrdws").lstrip("@")
+CRYPTO_BOT_TOKEN = env("CRYPTO_BOT_TOKEN", "599850:AA21TXJWkZO0aZT8DZFbB6NIwdj6jtKZ3YB")
+CUSTOM_DAY_MIN = 3
+CUSTOM_DAY_MAX = 730
 PREMIUM_DAYS = int(env("PREMIUM_DAYS", "30") or "30")
 PREMIUM_STARS = int(env("PREMIUM_STARS", "150") or "150")
 PREMIUM_PLANS = [
@@ -166,8 +169,8 @@ TEXTS = {
                 "btn_balance": "Баланс",
                 "btn_promo": "Промокод",
                 "btn_topup": "Пополнить",
-                "btn_pay_balance": "Оплатить балансом",
-                "btn_pay_admin": "Оплатить админу",
+                "btn_pay_balance": "Баланс",
+                "btn_pay_admin": "Админу",
                 "btn_reject_order": "Отклонить заказ",
                 "order_rejected": "❌ Заказ отклонён.\nЮзер: <code>{uid}</code> · {days} дн. / {price}₽",
                 "order_rejected_user": "❌ Заявка на Premium ({days} дн.) отклонена.\nЕсли это ошибка — напиши в поддержку.",
@@ -217,6 +220,20 @@ TEXTS = {
                 "promo_created": "✅ Промо <code>{code}</code> создан.",
                 "status_bal": "Баланс · <b>{bal:.0f}₽</b>",
                 "status_traffic": "Трафик · <b>{used:.1f}/{limit:.0f} ГБ</b>",
+                "buy_plan_custom": "Свои дни",
+                "custom_ask": "Сколько дней нужно?\nОт <b>{mn}</b> до <b>{mx}</b>.\nНапиши число, например <code>45</code>",
+                "custom_bad": "Введи число от {mn} до {mx}.",
+                "custom_quote": "Кастомный тариф: <b>{days} дн.</b>\nЦена: <b>{price}₽</b>\n\nВыбери оплату:",
+                "btn_pay_crypto": "CryptoBot",
+                "crypto_created": "Оплата CryptoBot на <b>{price}₽</b> ({days} дн.)\nНажми кнопку и оплати.",
+                "crypto_topup_created": "Пополнение CryptoBot на <b>{amount}₽</b>\nНажми и оплати.",
+                "btn_open_invoice": "Оплатить",
+                "btn_check_pay": "Проверить оплату",
+                "crypto_pending": "Оплата ещё не поступила. Подожди минуту и проверь снова.",
+                "crypto_ok": "✅ Оплата получена! Premium на {days} дн.",
+                "crypto_topup_ok": "✅ Оплата получена! Баланс +{amount}₽",
+                "crypto_fail": "Не удалось создать счёт. Попробуй позже или оплати админу.",
+                "cancel_user": "Отмена",
         "lang_set": "Язык сохранён: Русский",
     },
     "en": {
@@ -316,8 +333,8 @@ TEXTS = {
                 "btn_balance": "Balance",
                 "btn_promo": "Promo",
                 "btn_topup": "Top up",
-                "btn_pay_balance": "Pay by balance",
-                "btn_pay_admin": "Pay admin",
+                "btn_pay_balance": "Balance",
+                "btn_pay_admin": "Admin",
                 "btn_reject_order": "Reject order",
                 "order_rejected": "❌ Order rejected.\nUser: <code>{uid}</code> · {days}d / {price}₽",
                 "order_rejected_user": "❌ Premium request ({days}d) was rejected.\nIf this is a mistake — contact support.",
@@ -367,9 +384,122 @@ TEXTS = {
                 "promo_created": "✅ Promo <code>{code}</code> created.",
                 "status_bal": "Balance · <b>{bal:.0f}₽</b>",
                 "status_traffic": "Traffic · <b>{used:.1f}/{limit:.0f} GB</b>",
+                "buy_plan_custom": "Custom days",
+                "custom_ask": "How many days?\nFrom <b>{mn}</b> to <b>{mx}</b>.\nSend a number, e.g. <code>45</code>",
+                "custom_bad": "Enter a number from {mn} to {mx}.",
+                "custom_quote": "Custom plan: <b>{days}d</b>\nPrice: <b>{price}₽</b>\n\nChoose payment:",
+                "btn_pay_crypto": "CryptoBot",
+                "crypto_created": "CryptoBot invoice <b>{price}₽</b> ({days}d)\nTap to pay.",
+                "crypto_topup_created": "CryptoBot top-up <b>{amount}₽</b>\nTap to pay.",
+                "btn_open_invoice": "Pay",
+                "btn_check_pay": "Check payment",
+                "crypto_pending": "Not paid yet. Wait a bit and check again.",
+                "crypto_ok": "✅ Paid! Premium {days}d activated.",
+                "crypto_topup_ok": "✅ Paid! Balance +{amount}₽",
+                "crypto_fail": "Invoice failed. Try later or pay admin.",
+                "cancel_user": "Cancel",
         "lang_set": "Language saved: English",
     },
 }
+
+
+
+def calc_custom_price(days):
+    d = int(days)
+    if d <= 0:
+        return 0
+    if d <= 7:
+        return max(30, int(round(d * (50 / 7.0))))
+    if d <= 30:
+        return int(round(50 + (d - 7) * (150 / 23.0)))
+    if d <= 90:
+        return int(round(200 + (d - 30) * (200 / 60.0)))
+    if d <= 365:
+        return int(round(400 + (d - 90) * (400 / 275.0)))
+    return int(round(800 + (d - 365) * 2.0))
+
+
+def plan_price(days):
+    d = int(days)
+    if d in PLAN_PRICE:
+        return int(PLAN_PRICE[d])
+    return calc_custom_price(d)
+
+
+def crypto_api(method, payload=None):
+    if not CRYPTO_BOT_TOKEN:
+        raise RuntimeError("no crypto token")
+    url = "https://pay.crypt.bot/api/" + method
+    data = None
+    headers = {"Crypto-Pay-API-Token": CRYPTO_BOT_TOKEN}
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST" if data else "GET")
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        body = json.loads(resp.read().decode("utf-8"))
+    if not body.get("ok"):
+        raise RuntimeError(str(body))
+    return body.get("result")
+
+
+def crypto_create_invoice(amount_rub, description, payload, expires_in=3600):
+    # fiat RUB invoice
+    return crypto_api(
+        "createInvoice",
+        {
+            "currency_type": "fiat",
+            "fiat": "RUB",
+            "amount": str(int(amount_rub)),
+            "description": description[:1024],
+            "payload": str(payload)[:4096],
+            "expires_in": int(expires_in),
+            "allow_comments": False,
+            "allow_anonymous": True,
+        },
+    )
+
+
+def crypto_get_invoice(invoice_id):
+    res = crypto_api("getInvoices", {"invoice_ids": str(invoice_id)})
+    # result may be list or {items:[]}
+    if isinstance(res, dict) and "items" in res:
+        items = res.get("items") or []
+        return items[0] if items else None
+    if isinstance(res, list):
+        return res[0] if res else None
+    return res
+
+
+def kb_user_cancel(lang):
+    return {"inline_keyboard": [[{"text": t(lang, "cancel_user"), "callback_data": "mysub"}]]}
+
+
+def kb_pay_methods(lang, days, price):
+    return {
+        "inline_keyboard": [
+            [{"text": t(lang, "btn_pay_crypto"), "callback_data": "pcrypto_" + str(int(days))}],
+            [{"text": t(lang, "btn_pay_balance"), "callback_data": "paybal_" + str(int(days))}],
+            [{"text": t(lang, "btn_pay_admin"), "callback_data": "padmin_" + str(int(days))}],
+            [{"text": t(lang, "btn_back"), "callback_data": "buy"}],
+        ]
+    }
+
+
+def kb_crypto_invoice(lang, pay_url, invoice_id, kind):
+    # kind: prem or top
+    return {
+        "inline_keyboard": [
+            [{"text": t(lang, "btn_open_invoice"), "url": pay_url}],
+            [{"text": t(lang, "btn_check_pay"), "callback_data": "ccheck_" + kind + "_" + str(invoice_id)}],
+            [{"text": t(lang, "btn_back"), "callback_data": "mysub"}],
+        ]
+    }
+
+
+def fulfill_premium_purchase(conn, uid, days):
+    u = extend_subscription(conn, uid, int(days), status="premium")
+    return u
 
 
 def t(lang, key, **kw):
@@ -648,8 +778,6 @@ def status_text(user):
     lang = lang_of(user)
     active = is_active(user["status"], user["subscription_expires"])
     bal = float(user.get("balance") or 0)
-    tlim = float(user.get("traffic_limit") or 0) / (1024 ** 3)
-    tused = float(user.get("traffic_used") or 0) / (1024 ** 3)
     lines = [
         t(lang, "status_title", brand=BRAND),
         "",
@@ -661,8 +789,6 @@ def status_text(user):
     else:
         lines.append(t(lang, "inactive"))
     lines.append(t(lang, "status_bal", bal=bal))
-    if tlim > 0:
-        lines.append(t(lang, "status_traffic", used=tused, limit=tlim))
     lines.append(t(lang, "refs", n=user.get("referral_count") or 0, bonus=REF_BONUS_DAYS))
     if not active and not user["trial_used"]:
         lines.extend(["", t(lang, "trial_avail")])
@@ -911,6 +1037,7 @@ def kb_buy_plans(lang):
                 {"text": t(lang, "buy_plan_90"), "callback_data": "buy_90"},
                 {"text": t(lang, "buy_plan_365"), "callback_data": "buy_365"},
             ],
+            [{"text": t(lang, "buy_plan_custom"), "callback_data": "buy_custom"}],
             [{"text": t(lang, "btn_back"), "callback_data": "mysub"}],
         ]
     }
@@ -1374,27 +1501,216 @@ def handle_cb(conn, cq):
         if days not in (7, 30, 90, 365):
             ans(cq["id"])
             return
-        order = make_order_text(user, days)
-        text = t(lang, "buy_order", days=days, price=plan_price(days), order=html_lib.escape(order))
-        edit(chat, mid, text, kb_buy_order(lang, order, days))
-        # notify admin in background-ish
+        price = plan_price(days)
+        edit(
+            chat,
+            mid,
+            t(lang, "custom_quote", days=days, price=price),
+            kb_pay_methods(lang, days, price),
+        )
+        ans(cq["id"])
+        return
+
+
+    if data == "promo":
+        PENDING[tg_id] = {"action": "promo_code"}
+        edit(chat, mid, t(lang, "promo_ask"), kb_user_cancel(lang))
+        ans(cq["id"])
+        return
+
+    if data == "support":
+        PENDING[tg_id] = {"action": "support_new"}
+        edit(chat, mid, t(lang, "support_title"), kb_user_cancel(lang))
+        ans(cq["id"])
+        return
+
+    if data == "balance":
+        bal = float(user.get("balance") or 0)
+        edit(chat, mid, t(lang, "bal_title", bal=bal), kb_balance(lang))
+        ans(cq["id"])
+        return
+
+    if data == "topup":
+        edit(chat, mid, t(lang, "topup_title"), kb_topup_packs(lang))
+        ans(cq["id"])
+        return
+
+    if data.startswith("top_") and data[4:].isdigit():
+        amount = int(data.split("_", 1)[1])
+        if amount not in TOPUP_PACKS:
+            ans(cq["id"])
+            return
+        # crypto + admin options for topup
+        order = chr(10).join([
+            "FluxVPN topup",
+            "ID: " + str(tg_id),
+            "User: " + display_name(user),
+            "Amount: " + str(amount) + " RUB",
+        ])
+        ik = {
+            "inline_keyboard": [
+                [{"text": t(lang, "btn_pay_crypto"), "callback_data": "tcrypto_" + str(amount)}],
+                [{"text": t(lang, "btn_write_admin"), "url": admin_dm_link(order)}],
+                [{"text": t(lang, "btn_back"), "callback_data": "balance"}],
+            ]
+        }
+        edit(chat, mid, t(lang, "topup_order", amount=amount, order=html_lib.escape(order)), ik)
         try:
-            uname = html_lib.escape(display_name(user))
             send(
                 ADMIN_ID,
-                t(
-                    "ru",
-                    "admin_new_order",
-                    uid=tg_id,
-                    name=uname,
-                    days=days, price=plan_price(days),
-                ),
+                t("ru", "admin_topup_order", uid=tg_id, name=html_lib.escape(display_name(user)), amount=amount),
+                kb_admin_topup(tg_id, amount),
+            )
+        except Exception:
+            pass
+        ans(cq["id"])
+        return
+
+    if data == "buy_custom":
+        PENDING[tg_id] = {"action": "custom_days"}
+        edit(
+            chat,
+            mid,
+            t(lang, "custom_ask", mn=CUSTOM_DAY_MIN, mx=CUSTOM_DAY_MAX),
+            kb_user_cancel(lang),
+        )
+        ans(cq["id"])
+        return
+
+    if data.startswith("paybal_"):
+        days = int(data.split("_", 1)[1])
+        if days < CUSTOM_DAY_MIN or days > CUSTOM_DAY_MAX:
+            ans(cq["id"])
+            return
+        price = float(plan_price(days))
+        bal = float(user.get("balance") or 0)
+        if bal < price:
+            ans(cq["id"], t(lang, "bal_low", price=int(price), bal=bal), True)
+            return
+        conn.run(
+            "update users set balance = coalesce(balance,0) - :p where telegram_id=:id",
+            p=price,
+            id=tg_id,
+        )
+        user = fulfill_premium_purchase(conn, tg_id, days)
+        edit(chat, mid, t(lang, "bal_paid", price=int(price), days=days) + chr(10) + chr(10) + status_text(user), kb_main(user))
+        ans(cq["id"], "OK")
+        return
+
+    if data.startswith("padmin_"):
+        days = int(data.split("_", 1)[1])
+        if days < CUSTOM_DAY_MIN or days > CUSTOM_DAY_MAX:
+            ans(cq["id"])
+            return
+        order = make_order_text(user, days)
+        text = t(lang, "buy_order", days=days, price=plan_price(days), order=html_lib.escape(order))
+        edit(chat, mid, text, {
+            "inline_keyboard": [
+                [{"text": t(lang, "btn_write_admin"), "url": admin_dm_link(order)}],
+                [{"text": t(lang, "btn_choose_plan"), "callback_data": "buy"}],
+                [{"text": t(lang, "btn_back"), "callback_data": "mysub"}],
+            ]
+        })
+        try:
+            send(
+                ADMIN_ID,
+                t("ru", "admin_new_order", uid=tg_id, name=html_lib.escape(display_name(user)), days=days, price=plan_price(days)),
                 kb_admin_order(tg_id, days),
             )
         except Exception:
             pass
         ans(cq["id"])
         return
+
+    if data.startswith("pcrypto_"):
+        days = int(data.split("_", 1)[1])
+        price = plan_price(days)
+        try:
+            inv = crypto_create_invoice(
+                price,
+                BRAND + " Premium " + str(days) + "d",
+                "prem:" + str(tg_id) + ":" + str(days),
+            )
+            inv_id = inv.get("invoice_id") or inv.get("invoiceId") or inv.get("id")
+            pay_url = inv.get("pay_url") or inv.get("bot_invoice_url") or inv.get("mini_app_invoice_url")
+            if not inv_id or not pay_url:
+                raise RuntimeError(str(inv))
+            edit(
+                chat,
+                mid,
+                t(lang, "crypto_created", price=price, days=days),
+                kb_crypto_invoice(lang, pay_url, inv_id, "p"),
+            )
+        except Exception as e:
+            print("crypto prem", e, flush=True)
+            edit(chat, mid, t(lang, "crypto_fail"), kb_buy_plans(lang))
+        ans(cq["id"])
+        return
+
+    if data.startswith("tcrypto_") and data.split("_", 1)[1].isdigit():
+        amount = int(data.split("_", 1)[1])
+        try:
+            inv = crypto_create_invoice(
+                amount,
+                BRAND + " topup " + str(amount) + "RUB",
+                "top:" + str(tg_id) + ":" + str(amount),
+            )
+            inv_id = inv.get("invoice_id") or inv.get("invoiceId") or inv.get("id")
+            pay_url = inv.get("pay_url") or inv.get("bot_invoice_url") or inv.get("mini_app_invoice_url")
+            if not inv_id or not pay_url:
+                raise RuntimeError(str(inv))
+            edit(
+                chat,
+                mid,
+                t(lang, "crypto_topup_created", amount=amount),
+                kb_crypto_invoice(lang, pay_url, inv_id, "t"),
+            )
+        except Exception as e:
+            print("crypto top", e, flush=True)
+            edit(chat, mid, t(lang, "crypto_fail"), kb_topup_packs(lang))
+        ans(cq["id"])
+        return
+
+    if data.startswith("ccheck_"):
+        # ccheck_p_<id> or ccheck_t_<id>
+        parts = data.split("_")
+        if len(parts) >= 3:
+            kind = parts[1]
+            inv_id = parts[2]
+            try:
+                inv = crypto_get_invoice(inv_id)
+            except Exception as e:
+                print("crypto check", e, flush=True)
+                ans(cq["id"], t(lang, "crypto_pending"), True)
+                return
+            status = (inv or {}).get("status") or ""
+            payload = str((inv or {}).get("payload") or "")
+            if status != "paid":
+                ans(cq["id"], t(lang, "crypto_pending"), True)
+                return
+            if kind == "p" and payload.startswith("prem:"):
+                _, uid_s, days_s = payload.split(":", 2)
+                uid = int(uid_s); days = int(days_s)
+                if uid != tg_id and tg_id != ADMIN_ID:
+                    ans(cq["id"])
+                    return
+                user = fulfill_premium_purchase(conn, uid, days)
+                edit(chat, mid, t(lang, "crypto_ok", days=days) + chr(10) + chr(10) + status_text(user), kb_main(user))
+                ans(cq["id"], "OK")
+                return
+            if kind == "t" and payload.startswith("top:"):
+                _, uid_s, amt_s = payload.split(":", 2)
+                uid = int(uid_s); amount = int(float(amt_s))
+                if uid != tg_id and tg_id != ADMIN_ID:
+                    ans(cq["id"])
+                    return
+                user = add_balance(conn, uid, amount)
+                edit(chat, mid, t(lang, "crypto_topup_ok", amount=amount) + chr(10) + t(lang, "bal_title", bal=float(user.get("balance") or 0)), kb_main(user))
+                ans(cq["id"], "OK")
+                return
+        ans(cq["id"], t(lang, "crypto_pending"), True)
+        return
+
 
     if data == "servers":
         if not is_active(user["status"], user["subscription_expires"]):
@@ -1457,7 +1773,10 @@ def handle_cb(conn, cq):
 
     if data == "adm_cancel":
         clear_pending(tg_id)
-        open_admin(conn, chat, mid, lang)
+        if tg_id == ADMIN_ID:
+            open_admin(conn, chat, mid, lang)
+        else:
+            edit(chat, mid, status_text(user), kb_main(user))
         ans(cq["id"], t(lang, "cancelled"))
         return
 
@@ -1678,6 +1997,21 @@ def handle_admin_text(conn, msg):
         return True
 
 
+
+    if action == "custom_days":
+        if (not text.isdigit()) or int(text) < CUSTOM_DAY_MIN or int(text) > CUSTOM_DAY_MAX:
+            send(chat, t(lang, "custom_bad", mn=CUSTOM_DAY_MIN, mx=CUSTOM_DAY_MAX), kb_user_cancel(lang))
+            return True
+        days = int(text)
+        clear_pending(tg_id)
+        price = plan_price(days)
+        send(
+            chat,
+            t(lang, "custom_quote", days=days, price=price),
+            kb_pay_methods(lang, days, price),
+        )
+        return True
+
     if action == "promo_code":
         code = text.strip().upper()
         clear_pending(tg_id)
@@ -1853,12 +2187,11 @@ def handle_admin_text(conn, msg):
 def handle_cmd(conn, msg):
     text = (msg.get("text") or "").strip()
     tg_id = msg["from"]["id"]
-    if tg_id == ADMIN_ID and tg_id in PENDING:
+    # pending text flows for everyone (promo/support/custom + admin)
+    if tg_id in PENDING:
         if handle_admin_text(conn, msg):
             return
     if not text.startswith("/"):
-        if tg_id == ADMIN_ID and handle_admin_text(conn, msg):
-            return
         return
     chat = msg["chat"]["id"]
     parts = text.split(maxsplit=1)
@@ -2411,21 +2744,12 @@ class Handler(BaseHTTPRequestHandler):
                         if not active:
                             send_sub_response(self, expired_sub_body(lang), expire_ts=exp_ts)
                             return
-                        user = ensure_traffic_defaults(conn, user, days=30, is_trial=(user.get("status")=="trial"))
-                        if not traffic_ok(user):
-                            send_sub_response(self, traffic_sub_body(lang), expire_ts=exp_ts)
-                            return
-
                         allowed, cnt, limit, reason = touch_device(conn, user, ua, ip)
                         if not allowed:
                             body = blocked_sub_body(lang) if reason == "blocked" else limit_sub_body(lang)
                             send_sub_response(self, body, expire_ts=exp_ts)
                             return
 
-                        user = maybe_soft_traffic_tick(conn, user)
-                        if not traffic_ok(user):
-                            send_sub_response(self, traffic_sub_body(lang), expire_ts=exp_ts)
-                            return
                         servers = get_servers(conn)
                         lines = [brand_config(s[1], s[2]) for s in servers if brand_config(s[1], s[2])]
                         body = chr(10).join(lines)
