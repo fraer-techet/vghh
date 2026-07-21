@@ -30,11 +30,16 @@ ADMIN_USERNAME = (env("ADMIN_USERNAME", "zrdws") or "zrdws").lstrip("@")
 PREMIUM_DAYS = int(env("PREMIUM_DAYS", "30") or "30")
 PREMIUM_STARS = int(env("PREMIUM_STARS", "150") or "150")
 PREMIUM_PLANS = [
-    {"days": 7, "key": "7"},
-    {"days": 14, "key": "14"},
-    {"days": 30, "key": "30"},
-    {"days": 365, "key": "365"},
+    {"days": 7, "key": "7", "price": 50},
+    {"days": 30, "key": "30", "price": 200},
+    {"days": 90, "key": "90", "price": 400},
+    {"days": 365, "key": "365", "price": 800},
 ]
+PLAN_PRICE = {7: 50, 30: 200, 90: 400, 365: 800}
+PLAN_PRICE = {7: 50, 30: 200, 90: 400, 365: 800}
+
+def plan_price(days):
+    return int(PLAN_PRICE.get(int(days), 0))
 PORT = int(env("PORT", "10000") or "10000")
 PUBLIC_URL = (env("PUBLIC_URL") or env("RENDER_EXTERNAL_URL") or "").rstrip("/")
 
@@ -66,21 +71,19 @@ TEXTS = {
         "days": "Осталось · <b>{days} дн.</b>",
         "inactive": "Статус · <b>неактивна</b>",
         "refs": "Рефералы · <b>{n}</b>  ·  +{bonus} дн. за друга",
-        "sub": "🔗 Ссылка подписки:",
-        "ref_link": "🤝 Твоя реф-ссылка:",
         "trial_avail": "Доступен пробный период 7 дней.",
         "need_premium": "Нужен Premium для доступа.",
         "btn_trial": "Триал 7 дней",
         "btn_buy": "Купить Premium",
-        "buy_title": "<b>Premium</b>\nВыбери срок. Оплата — в личные сообщения админу.",
-        "buy_plan_7": "7 дней",
-        "buy_plan_14": "14 дней",
-        "buy_plan_30": "30 дней",
-        "buy_plan_365": "1 год",
-        "buy_order": "Заявка на <b>{days} дн.</b> Premium.\n\n1) Нажми «Написать админу»\n2) Отправь ему этот заказ\n3) После оплаты доступ выдадут вручную.\n\n<code>{order}</code>",
+        "buy_title": "<b>Premium</b>\nВыбери тариф. Оплата админу @zrdws.",
+        "buy_plan_7": "7 дней — 50₽",
+        "buy_plan_30": "30 дней — 200₽",
+        "buy_plan_90": "90 дней — 400₽",
+        "buy_plan_365": "1 год — 800₽",
+        "buy_order": "Заявка: <b>{days} дн.</b> / <b>{price}₽</b>\n\n1) Напиши админу\n2) Отправь заказ\n3) После оплаты нажмёт «Заказ оплачен»\n\n<code>{order}</code>",
         "btn_write_admin": "Написать админу",
         "btn_choose_plan": "Другой срок",
-        "admin_new_order": "🛒 <b>Новый заказ</b>\nОт: <code>{uid}</code> {name}\nПлан: <b>{days} дн.</b>",
+        "admin_new_order": "🛒 <b>Новый заказ</b>\nОт: <code>{uid}</code> {name}\nПлан: <b>{days} дн.</b> / <b>{price}₽</b>",
         "btn_order_paid": "✅ Заказ оплачен",
         "order_paid_ok": "✅ Заказ подтверждён.\nЮзеру <code>{uid}</code> выдано <b>{days} дн.</b> Premium.",
         "order_paid_user": "✅ Оплата подтверждена.\nТебе начислено <b>{days} дн.</b> Premium.",
@@ -92,7 +95,6 @@ TEXTS = {
         "btn_cab": "Кабинет",
         "btn_copy_key": "Скопировать ключ",
         "btn_copy_ref": "Скопировать реф",
-        "copied_hint": "Готово. Вставь ключ в VPN-клиент как subscription.",
         "btn_admin": "Админ",
         "btn_back": "Назад",
         "trial_ok": "Триал активирован на 7 дней.",
@@ -107,7 +109,7 @@ TEXTS = {
         "ref_bonus_inviter": "Реферальный бонус: +{bonus} дн. ({brand})",
         "pay_ok": "Premium активирован.",
         "admin_title": "🛠 <b>Админка {brand}</b>",
-        "admin_stats": "👥 Юзеров: <b>{total}</b>\n🟢 Активных: <b>{active}</b>\n💎 Premium: <b>{premium}</b>\n✨ Trial: <b>{trial}</b>\n🎁 Рефов: <b>{refs}</b>\n🛰 Серверов: <b>{servers}</b>",
+        "admin_stats": "👥 Юзеров: <b>{total}</b>\n🟢 Активных: <b>{active}</b>\n💎 Premium: <b>{premium}</b>\n✨ Trial: <b>{trial}</b>\n🎁 Рефов: <b>{refs}</b>\n🛰 Серверов: <b>{servers}</b>\n📱 Устройств: <b>{devices}</b>",
         "adm_stats": "📈 Статистика",
         "adm_users": "👥 Пользователи",
         "adm_servers": "🛰 Серверы",
@@ -120,6 +122,14 @@ TEXTS = {
         "adm_add_srv": "➕ Сервер",
         "adm_del_srv": "🗑 Удалить сервер",
         "adm_find": "🔎 Найти юзера",
+        "adm_reset_devices": "📱 Сброс устройств",
+        "adm_prices": "💰 Тарифы",
+        "adm_orders_help": "ℹ️ Как выдавать",
+        "adm_search": "🔎 Поиск",
+        "prices_text": "<b>Тарифы FluxVPN</b>\n\n• 7 дней — <b>50₽</b>\n• 30 дней — <b>200₽</b>\n• 90 дней — <b>400₽</b>\n• 1 год — <b>800₽</b>",
+        "orders_help": "Юзер жмёт Купить → тариф → пишет тебе.\nПосле оплаты жми <b>Заказ оплачен</b> в уведомлении.",
+        "device_reset_ok": "✅ Устройства пользователя заблокированы. После обновления подписки в VPN конфиги пропадут.",
+        "ask_reset_devices": "Отправь Telegram ID для сброса устройств.",
         "ask_user_id": "Отправь Telegram ID пользователя числом.",
         "ask_broadcast": "Отправь текст рассылки одним сообщением.",
         "ask_server_name": "Отправь название сервера (можно с флагом).\nПример: 🇩🇪 Germany",
@@ -156,21 +166,19 @@ TEXTS = {
         "days": "Left · <b>{days} d</b>",
         "inactive": "Status · <b>inactive</b>",
         "refs": "Referrals · <b>{n}</b>  ·  +{bonus}d each",
-        "sub": "🔗 Subscription link:",
-        "ref_link": "🤝 Your referral link:",
         "trial_avail": "7-day trial available.",
         "need_premium": "Premium required.",
         "btn_trial": "Trial 7 days",
         "btn_buy": "Buy Premium",
-        "buy_title": "<b>Premium</b>\nChoose a plan. Payment is via admin DM.",
-        "buy_plan_7": "7 days",
-        "buy_plan_14": "14 days",
-        "buy_plan_30": "30 days",
-        "buy_plan_365": "1 year",
-        "buy_order": "Order: <b>{days}d</b> Premium.\n\n1) Tap Write admin\n2) Send this order\n3) Access after payment.\n\n<code>{order}</code>",
+        "buy_title": "<b>Premium</b>\nChoose a plan. Pay via admin @zrdws.",
+        "buy_plan_7": "7 days — 50₽",
+        "buy_plan_30": "30 days — 200₽",
+        "buy_plan_90": "90 days — 400₽",
+        "buy_plan_365": "1 year — 800₽",
+        "buy_order": "Order: <b>{days}d</b> / <b>{price}₽</b>\n\n1) Message admin\n2) Send this order\n3) Admin confirms payment\n\n<code>{order}</code>",
         "btn_write_admin": "Write admin",
         "btn_choose_plan": "Other plan",
-        "admin_new_order": "🛒 <b>New order</b>\nFrom: <code>{uid}</code> {name}\nPlan: <b>{days}d</b>",
+        "admin_new_order": "🛒 <b>New order</b>\nFrom: <code>{uid}</code> {name}\nPlan: <b>{days}d</b> / <b>{price}₽</b>",
         "btn_order_paid": "✅ Order paid",
         "order_paid_ok": "✅ Order confirmed.\nUser <code>{uid}</code> got <b>{days}d</b> Premium.",
         "order_paid_user": "✅ Payment confirmed.\nYou received <b>{days}d</b> Premium.",
@@ -182,7 +190,6 @@ TEXTS = {
         "btn_cab": "Cabinet",
         "btn_copy_key": "Copy key",
         "btn_copy_ref": "Copy referral",
-        "copied_hint": "Done. Paste the key into your VPN client as subscription.",
         "btn_admin": "Admin",
         "btn_back": "Back",
         "trial_ok": "Trial activated for 7 days.",
@@ -197,7 +204,7 @@ TEXTS = {
         "ref_bonus_inviter": "Referral bonus: +{bonus}d ({brand})",
         "pay_ok": "Premium activated.",
         "admin_title": "🛠 <b>{brand} Admin</b>",
-        "admin_stats": "👥 Users: <b>{total}</b>\n🟢 Active: <b>{active}</b>\n💎 Premium: <b>{premium}</b>\n✨ Trial: <b>{trial}</b>\n🎁 Refs: <b>{refs}</b>\n🛰 Servers: <b>{servers}</b>",
+        "admin_stats": "👥 Users: <b>{total}</b>\n🟢 Active: <b>{active}</b>\n💎 Premium: <b>{premium}</b>\n✨ Trial: <b>{trial}</b>\n🎁 Refs: <b>{refs}</b>\n🛰 Servers: <b>{servers}</b>\n📱 Devices: <b>{devices}</b>",
         "adm_stats": "📈 Stats",
         "adm_users": "👥 Users",
         "adm_servers": "🛰 Servers",
@@ -210,6 +217,14 @@ TEXTS = {
         "adm_add_srv": "➕ Server",
         "adm_del_srv": "🗑 Delete server",
         "adm_find": "🔎 Find user",
+        "adm_reset_devices": "📱 Reset devices",
+        "adm_prices": "💰 Prices",
+        "adm_orders_help": "ℹ️ How to grant",
+        "adm_search": "🔎 Search",
+        "prices_text": "<b>FluxVPN prices</b>\n\n• 7 days — <b>50₽</b>\n• 30 days — <b>200₽</b>\n• 90 days — <b>400₽</b>\n• 1 year — <b>800₽</b>",
+        "orders_help": "User buys a plan and DMs you. After payment tap <b>Order paid</b>.",
+        "device_reset_ok": "✅ User devices blocked. After sub refresh VPN configs disappear.",
+        "ask_reset_devices": "Send Telegram ID to reset devices.",
         "ask_user_id": "Send user Telegram ID as a number.",
         "ask_broadcast": "Send broadcast text in one message.",
         "ask_server_name": "Send server name (flag allowed).\nExample: 🇩🇪 Germany",
@@ -238,6 +253,7 @@ TEXTS = {
         "lang_set": "Language saved: English",
     },
 }
+
 
 def t(lang, key, **kw):
     lang = lang if lang in TEXTS else "ru"
@@ -326,6 +342,17 @@ def ensure_schema(conn):
             conn.run("create index if not exists idx_devices_tg on devices(telegram_id)")
         except Exception:
             pass
+        dcols = {
+            r[0]
+            for r in conn.run(
+                "select column_name from information_schema.columns where table_name='devices'"
+            )
+        }
+        if dcols and "blocked" not in dcols:
+            try:
+                conn.run("alter table devices add column blocked boolean not null default false")
+            except Exception:
+                pass
         _schema_ready = True
 
 def api(method, payload=None, timeout=60):
@@ -523,10 +550,10 @@ def kb_buy_plans(lang):
         "inline_keyboard": [
             [
                 {"text": t(lang, "buy_plan_7"), "callback_data": "buy_7"},
-                {"text": t(lang, "buy_plan_14"), "callback_data": "buy_14"},
+                {"text": t(lang, "buy_plan_30"), "callback_data": "buy_30"},
             ],
             [
-                {"text": t(lang, "buy_plan_30"), "callback_data": "buy_30"},
+                {"text": t(lang, "buy_plan_90"), "callback_data": "buy_90"},
                 {"text": t(lang, "buy_plan_365"), "callback_data": "buy_365"},
             ],
             [{"text": t(lang, "btn_back"), "callback_data": "mysub"}],
@@ -545,11 +572,13 @@ def admin_dm_link(order_text=""):
 
 def make_order_text(user, days):
     uname = display_name(user)
+    price = plan_price(days)
     parts = [
         "FluxVPN order",
         "ID: " + str(user["telegram_id"]),
         "User: " + uname,
         "Plan: " + str(days) + " days Premium",
+        "Price: " + str(price) + " RUB",
     ]
     return chr(10).join(parts)
 
@@ -583,11 +612,11 @@ def kb_admin(lang):
         "inline_keyboard": [
             [
                 {"text": t(lang, "adm_stats"), "callback_data": "adm_stats"},
-                {"text": t(lang, "adm_users"), "callback_data": "adm_users"},
+                {"text": t(lang, "adm_active"), "callback_data": "adm_active"},
             ],
             [
-                {"text": t(lang, "adm_servers"), "callback_data": "adm_servers"},
-                {"text": t(lang, "adm_active"), "callback_data": "adm_active"},
+                {"text": t(lang, "adm_users"), "callback_data": "adm_users"},
+                {"text": t(lang, "adm_find"), "callback_data": "adm_find"},
             ],
             [
                 {"text": t(lang, "adm_grant_self"), "callback_data": "adm_grant_self"},
@@ -598,16 +627,24 @@ def kb_admin(lang):
                 {"text": t(lang, "adm_revoke"), "callback_data": "adm_revoke"},
             ],
             [
+                {"text": t(lang, "adm_reset_devices"), "callback_data": "adm_reset_devices"},
+                {"text": t(lang, "adm_servers"), "callback_data": "adm_servers"},
+            ],
+            [
                 {"text": t(lang, "adm_add_srv"), "callback_data": "adm_add_srv"},
                 {"text": t(lang, "adm_del_srv"), "callback_data": "adm_del_srv"},
             ],
             [
                 {"text": t(lang, "adm_broadcast"), "callback_data": "adm_broadcast"},
-                {"text": t(lang, "adm_find"), "callback_data": "adm_find"},
+                {"text": t(lang, "adm_prices"), "callback_data": "adm_prices"},
+            ],
+            [
+                {"text": t(lang, "adm_orders_help"), "callback_data": "adm_orders_help"},
             ],
             [{"text": t(lang, "btn_back"), "callback_data": "mysub"}],
         ]
     }
+
 
 def kb_days(prefix, lang):
     return {
@@ -620,10 +657,11 @@ def kb_days(prefix, lang):
                 {"text": t(lang, "days_90"), "callback_data": prefix + "_90"},
                 {"text": t(lang, "days_365"), "callback_data": prefix + "_365"},
             ],
-            [{ "text": t(lang, "days_9999"), "callback_data": prefix + "_9999" }],
-            [{ "text": t(lang, "cancel"), "callback_data": "adm_cancel" }],
+            [{"text": t(lang, "days_9999"), "callback_data": prefix + "_9999"}],
+            [{"text": t(lang, "cancel"), "callback_data": "adm_cancel"}],
         ]
     }
+
 
 def send(chat_id, text, markup=None):
     p = {
@@ -768,6 +806,10 @@ def admin_stats_text(conn, lang):
     ensure_schema(conn)
     total = conn.run("select count(*) from users")[0][0]
     servers = conn.run("select count(*) from server_pool")[0][0]
+    try:
+        devices = conn.run("select count(*) from devices where coalesce(blocked,false)=false")[0][0]
+    except Exception:
+        devices = 0
     refs = conn.run("select coalesce(sum(referral_count),0) from users")[0][0]
     active = premium = trial = 0
     for r in conn.run(USER_SELECT):
@@ -790,6 +832,7 @@ def admin_stats_text(conn, lang):
             trial=trial,
             refs=refs,
             servers=servers,
+            devices=devices,
         )
     )
 
@@ -971,11 +1014,11 @@ def handle_cb(conn, cq):
 
     if data.startswith("buy_") and data[4:].isdigit():
         days = int(data.split("_", 1)[1])
-        if days not in (7, 14, 30, 365):
+        if days not in (7, 30, 90, 365):
             ans(cq["id"])
             return
         order = make_order_text(user, days)
-        text = t(lang, "buy_order", days=days, order=html_lib.escape(order))
+        text = t(lang, "buy_order", days=days, price=plan_price(days), order=html_lib.escape(order))
         edit(chat, mid, text, kb_buy_order(lang, order))
         # notify admin in background-ish
         try:
@@ -987,7 +1030,7 @@ def handle_cb(conn, cq):
                     "admin_new_order",
                     uid=tg_id,
                     name=uname,
-                    days=days,
+                    days=days, price=plan_price(days),
                 ),
                 kb_admin_order(tg_id, days),
             )
@@ -1029,7 +1072,7 @@ def handle_cb(conn, cq):
             return
         uid = int(parts[1])
         days = int(parts[2])
-        if days not in (7, 14, 30, 365, 90, 9999):
+        if days not in (7, 30, 90, 365, 9999):
             # allow common grant lengths too
             if days <= 0 or days > 4000:
                 ans(cq["id"], t(lang, "order_bad"), True)
@@ -1133,6 +1176,23 @@ def handle_cb(conn, cq):
     if data == "adm_find":
         PENDING[tg_id] = {"action": "find_user_id"}
         edit(chat, mid, t(lang, "ask_user_id"), kb_cancel(lang))
+        ans(cq["id"])
+        return
+
+
+    if data == "adm_prices":
+        edit(chat, mid, t(lang, "prices_text"), kb_admin(lang))
+        ans(cq["id"])
+        return
+
+    if data == "adm_orders_help":
+        edit(chat, mid, t(lang, "orders_help"), kb_admin(lang))
+        ans(cq["id"])
+        return
+
+    if data == "adm_reset_devices":
+        PENDING[tg_id] = {"action": "reset_devices_id"}
+        edit(chat, mid, t(lang, "ask_reset_devices"), kb_cancel(lang))
         ans(cq["id"])
         return
 
@@ -1392,30 +1452,37 @@ def device_name_from(ua):
     return (name or "Device")[:40]
 
 
+
 def list_devices(conn, telegram_id):
     return conn.run(
         "select id, device_name, user_agent, last_ip, created_at, last_seen, device_hash "
-        "from devices where telegram_id=:tg order by last_seen desc",
+        "from devices where telegram_id=:tg and coalesce(blocked,false)=false order by last_seen desc",
         tg=telegram_id,
     )
 
 
 def count_devices(conn, telegram_id):
-    return int(conn.run("select count(*) from devices where telegram_id=:tg", tg=telegram_id)[0][0])
+    return int(
+        conn.run(
+            "select count(*) from devices where telegram_id=:tg and coalesce(blocked,false)=false",
+            tg=telegram_id,
+        )[0][0]
+    )
 
 
 def touch_device(conn, user, ua, ip):
-    """Register/update VPN client device. Returns (allowed: bool, devices_count, limit)."""
     limit = device_limit_for(user)
     tg = user["telegram_id"]
     dhash = device_hash_from(ua, ip)
     name = device_name_from(ua)
     existing = conn.run(
-        "select id from devices where telegram_id=:tg and device_hash=:h limit 1",
+        "select id, coalesce(blocked,false) from devices where telegram_id=:tg and device_hash=:h limit 1",
         tg=tg,
         h=dhash,
     )
     if existing:
+        if bool(existing[0][1]):
+            return False, count_devices(conn, tg), limit, "blocked"
         conn.run(
             "update devices set last_seen=now(), user_agent=:ua, last_ip=:ip, device_name=:n where id=:id",
             ua=(ua or "")[:300],
@@ -1423,47 +1490,70 @@ def touch_device(conn, user, ua, ip):
             n=name,
             id=existing[0][0],
         )
-        cnt = count_devices(conn, tg)
-        return True, cnt, limit
+        return True, count_devices(conn, tg), limit, "ok"
 
     cnt = count_devices(conn, tg)
     if cnt >= limit:
-        return False, cnt, limit
+        return False, cnt, limit, "limit"
 
-    conn.run(
-        "insert into devices (telegram_id, device_hash, device_name, user_agent, last_ip) "
-        "values (:tg, :h, :n, :ua, :ip)",
-        tg=tg,
-        h=dhash,
-        n=name,
-        ua=(ua or "")[:300],
-        ip=ip or "",
-    )
-    cnt = count_devices(conn, tg)
-    return True, cnt, limit
+    try:
+        conn.run(
+            "insert into devices (telegram_id, device_hash, device_name, user_agent, last_ip, blocked) "
+            "values (:tg, :h, :n, :ua, :ip, false)",
+            tg=tg, h=dhash, n=name, ua=(ua or "")[:300], ip=ip or "",
+        )
+    except Exception:
+        conn.run(
+            "insert into devices (telegram_id, device_hash, device_name, user_agent, last_ip) "
+            "values (:tg, :h, :n, :ua, :ip)",
+            tg=tg, h=dhash, n=name, ua=(ua or "")[:300], ip=ip or "",
+        )
+    return True, count_devices(conn, tg), limit, "ok"
 
 
 def delete_device(conn, telegram_id, device_id):
+    try:
+        rows = conn.run(
+            "update devices set blocked=true, last_seen=now() where id=:id and telegram_id=:tg returning id",
+            id=int(device_id), tg=telegram_id,
+        )
+        if rows:
+            return True
+    except Exception:
+        pass
     rows = conn.run(
         "delete from devices where id=:id and telegram_id=:tg returning id",
-        id=int(device_id),
-        tg=telegram_id,
+        id=int(device_id), tg=telegram_id,
     )
     return bool(rows)
 
 
+def reset_user_devices(conn, telegram_id):
+    try:
+        conn.run(
+            "update devices set blocked=true where telegram_id=:tg and coalesce(blocked,false)=false",
+            tg=int(telegram_id),
+        )
+    except Exception:
+        conn.run("delete from devices where telegram_id=:tg", tg=int(telegram_id))
+
+
 def limit_sub_body(lang="ru"):
-    if lang == "en":
-        title = "FluxVPN | Device limit"
-    else:
-        title = "FluxVPN | Лимит устройств"
+    title = "FluxVPN | Device limit" if lang == "en" else "FluxVPN | Лимит устройств"
     remark = urllib.parse.quote(title, safe="")
-    line = (
+    return (
         "vless://00000000-0000-0000-0000-000000000000@127.0.0.1:1"
-        + "?encryption=none&security=none&type=tcp#"
-        + remark
+        "?encryption=none&security=none&type=tcp#" + remark + chr(10)
     )
-    return line + chr(10)
+
+
+def blocked_sub_body(lang="ru"):
+    title = "FluxVPN | Device removed" if lang == "en" else "FluxVPN | Устройство удалено"
+    remark = urllib.parse.quote(title, safe="")
+    return (
+        "vless://00000000-0000-0000-0000-000000000000@127.0.0.1:1"
+        "?encryption=none&security=none&type=tcp#" + remark + chr(10)
+    )
 
 
 def render_denied():
@@ -1621,7 +1711,7 @@ def render_cabinet(user, servers, devices=None, device_limit=0):
         "<span class=muted>" + str(len(servers)) + "</span></div>" + servers_html + "</div></section>"
         "<section id=p-dev class=panel><div class=card><div class=head><h2>Устройства</h2>"
         "<span class=muted>" + str(dev_count) + " / " + str(int(device_limit or 0)) + "</span></div>"
-        "<p class=note>Trial — до 2 устройств, Premium — до 4. При превышении подписка отдаёт «Лимит устройств». Удали лишние здесь.</p>"
+        "<p class=note>Trial — 2, Premium — 4. Удаление блокирует устройство: обнови подписку в VPN-клиенте — конфиги пропадут.</p>"
         + devices_html + "</div></section>"
         "<div class=foot>FluxVPN</div></div><script>" + js
         + "document.getElementById('copyBtn').onclick=copySub;"
@@ -1787,9 +1877,10 @@ class Handler(BaseHTTPRequestHandler):
                             send_sub_response(self, expired_sub_body(lang), expire_ts=exp_ts)
                             return
 
-                        allowed, cnt, limit = touch_device(conn, user, ua, ip)
+                        allowed, cnt, limit, reason = touch_device(conn, user, ua, ip)
                         if not allowed:
-                            send_sub_response(self, limit_sub_body(lang), expire_ts=exp_ts)
+                            body = blocked_sub_body(lang) if reason == "blocked" else limit_sub_body(lang)
+                            send_sub_response(self, body, expire_ts=exp_ts)
                             return
 
                         servers = get_servers(conn)
