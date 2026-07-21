@@ -19,6 +19,9 @@ BRAND = "FluxVPN"
 REF_BONUS_DAYS = 5
 TRIAL_DEVICE_LIMIT = 2
 PREMIUM_DEVICE_LIMIT = 4
+TRAFFIC_GB_TRIAL = 25
+TRAFFIC_GB_BY_DAYS = {7: 50, 30: 150, 90: 400, 365: 1200}
+TOPUP_PACKS = [100, 200, 500, 1000]
 
 def env(name, default=""):
     return os.environ.get(name, default)
@@ -58,7 +61,11 @@ _schema_ready = False
 PENDING = {}
 USER_SELECT = (
     "select telegram_id, status, trial_used, subscription_expires, sub_token, "
-    "referral_code, referred_by, referral_count, username, full_name, lang from users"
+    "referral_code, referred_by, referral_count, username, full_name, lang, "
+    "coalesce(balance,0), coalesce(banned,false), ban_reason, "
+    "coalesce(traffic_limit,0), coalesce(traffic_used,0), "
+    "coalesce(notify_2d,false), coalesce(notify_1d,false), coalesce(notify_1h,false), coalesce(notify_exp,false) "
+    "from users"
 )
 
 TEXTS = {
@@ -155,6 +162,61 @@ TEXTS = {
         "none_active": "Активных нет.",
         "pick_server_del": "Выбери сервер для удаления:",
         "no_servers": "Серверов нет.",
+                "btn_support": "Поддержка",
+                "btn_balance": "Баланс",
+                "btn_promo": "Промокод",
+                "btn_topup": "Пополнить",
+                "btn_pay_balance": "Оплатить балансом",
+                "btn_pay_admin": "Оплатить админу",
+                "btn_reject_order": "Отклонить заказ",
+                "order_rejected": "❌ Заказ отклонён.\nЮзер: <code>{uid}</code> · {days} дн. / {price}₽",
+                "order_rejected_user": "❌ Заявка на Premium ({days} дн.) отклонена.\nЕсли это ошибка — напиши в поддержку.",
+                "bal_title": "<b>Баланс</b>\nСейчас: <b>{bal:.0f}₽</b>",
+                "bal_low": "Недостаточно средств. Нужно {price}₽, у тебя {bal:.0f}₽.",
+                "bal_paid": "✅ Списано {price}₽. Premium на {days} дн. активирован.",
+                "topup_title": "<b>Пополнение</b>\nВыбери сумму. Оплата — админу, как с Premium.",
+                "topup_order": "Пополнение баланса: <b>{amount}₽</b>\n\n1) Напиши админу\n2) Отправь этот заказ\n3) После оплаты нажмёт «Баланс пополнен»\n\n<code>{order}</code>",
+                "btn_topup_paid": "✅ Баланс пополнен",
+                "topup_paid_ok": "✅ Баланс <code>{uid}</code> +{amount}₽",
+                "topup_paid_user": "✅ Баланс пополнен на <b>{amount}₽</b>.\nСейчас: <b>{bal:.0f}₽</b>",
+                "admin_topup_order": "💳 <b>Пополнение</b>\nОт: <code>{uid}</code> {name}\nСумма: <b>{amount}₽</b>",
+                "promo_ask": "Отправь промокод одним сообщением.",
+                "promo_ok_days": "✅ Промокод принят: +{v} дн. Premium.",
+                "promo_ok_balance": "✅ Промокод принят: +{v:.0f}₽ на баланс.",
+                "promo_ok_percent": "✅ Промокод принят: скидка {v:.0f}% на следующую покупку с баланса.",
+                "promo_bad": "Промокод недействителен.",
+                "promo_used": "Ты уже использовал этот промокод.",
+                "support_title": "<b>Поддержка</b>\nОпиши проблему одним сообщением — создадим тикет.",
+                "support_created": "✅ Тикет #{id} создан. Жди ответа.",
+                "support_reply_user": "💬 <b>Ответ поддержки</b> (тикет #{id})\n\n{body}",
+                "support_new_admin": "🎫 <b>Тикет #{id}</b>\nОт: <code>{uid}</code> {name}\n\n{body}",
+                "btn_ticket_reply": "Ответить",
+                "btn_ticket_close": "Закрыть",
+                "ticket_closed": "Тикет #{id} закрыт.",
+                "ticket_ask_reply": "Отправь ответ для тикета #{id}.",
+                "banned_msg": "🚫 Доступ ограничен.\nПричина: {reason}",
+                "notify_2d": "⏰ <b>{brand}</b>\nБрат, подписка кончается через <b>2 дня</b>.\nПродли сейчас — без разрывов и нервов. 💪",
+                "notify_1d": "⏰ <b>{brand}</b>\nОстался <b>1 день</b> подписки.\nПродли заранее, будет спокойнее. 🔥",
+                "notify_1h": "⏰ <b>{brand}</b>\nДо конца примерно <b>час</b>.\nПродли подписку — и остаёшься на связи. ⚡",
+                "notify_exp": "❌ <b>{brand}</b>\nПодписка закончилась.\nПродли — и доступ вернётся сразу. Лучше не тянуть, братан. 🚀",
+                "traffic_out": "FluxVPN | Лимит трафика",
+                "adm_ban": "🚫 Бан",
+                "adm_unban": "✅ Разбан",
+                "adm_promo": "🏷 Промокоды",
+                "adm_add_balance": "💰 +баланс",
+                "adm_set_traffic": "📶 Трафик",
+                "adm_tickets": "🎫 Тикеты",
+                "ask_ban_id": "ID для бана:",
+                "ask_ban_reason": "Причина бана одним сообщением:",
+                "ask_unban_id": "ID для разбана:",
+                "ask_add_balance": "Формат: ID СУММА\nПример: 123456 200",
+                "ask_promo_create": "Формат промо:\nCODE days N\nCODE balance N\nПример:\nFLUX50 days 7\nBONUS100 balance 100",
+                "ban_ok": "🚫 Забанен <code>{id}</code>",
+                "unban_ok": "✅ Разбанен <code>{id}</code>",
+                "balance_added": "✅ Баланс <code>{id}</code> +{amount}₽ (итого {bal:.0f}₽)",
+                "promo_created": "✅ Промо <code>{code}</code> создан.",
+                "status_bal": "Баланс · <b>{bal:.0f}₽</b>",
+                "status_traffic": "Трафик · <b>{used:.1f}/{limit:.0f} ГБ</b>",
         "lang_set": "Язык сохранён: Русский",
     },
     "en": {
@@ -250,6 +312,61 @@ TEXTS = {
         "none_active": "No active subs.",
         "pick_server_del": "Pick server to delete:",
         "no_servers": "No servers.",
+                "btn_support": "Support",
+                "btn_balance": "Balance",
+                "btn_promo": "Promo",
+                "btn_topup": "Top up",
+                "btn_pay_balance": "Pay by balance",
+                "btn_pay_admin": "Pay admin",
+                "btn_reject_order": "Reject order",
+                "order_rejected": "❌ Order rejected.\nUser: <code>{uid}</code> · {days}d / {price}₽",
+                "order_rejected_user": "❌ Premium request ({days}d) was rejected.\nIf this is a mistake — contact support.",
+                "bal_title": "<b>Balance</b>\nNow: <b>{bal:.0f}₽</b>",
+                "bal_low": "Not enough funds. Need {price}₽, you have {bal:.0f}₽.",
+                "bal_paid": "✅ Charged {price}₽. Premium {days}d activated.",
+                "topup_title": "<b>Top up</b>\nChoose amount. Pay via admin DM.",
+                "topup_order": "Balance top-up: <b>{amount}₽</b>\n\n1) Message admin\n2) Send order\n3) Admin confirms\n\n<code>{order}</code>",
+                "btn_topup_paid": "✅ Balance topped up",
+                "topup_paid_ok": "✅ Balance <code>{uid}</code> +{amount}₽",
+                "topup_paid_user": "✅ Balance +<b>{amount}₽</b>.\nNow: <b>{bal:.0f}₽</b>",
+                "admin_topup_order": "💳 <b>Top-up</b>\nFrom: <code>{uid}</code> {name}\nAmount: <b>{amount}₽</b>",
+                "promo_ask": "Send promo code in one message.",
+                "promo_ok_days": "✅ Promo OK: +{v} days Premium.",
+                "promo_ok_balance": "✅ Promo OK: +{v:.0f}₽ balance.",
+                "promo_ok_percent": "✅ Promo OK: {v:.0f}% off next balance purchase.",
+                "promo_bad": "Invalid promo.",
+                "promo_used": "You already used this promo.",
+                "support_title": "<b>Support</b>\nDescribe the issue in one message.",
+                "support_created": "✅ Ticket #{id} created.",
+                "support_reply_user": "💬 <b>Support reply</b> (ticket #{id})\n\n{body}",
+                "support_new_admin": "🎫 <b>Ticket #{id}</b>\nFrom: <code>{uid}</code> {name}\n\n{body}",
+                "btn_ticket_reply": "Reply",
+                "btn_ticket_close": "Close",
+                "ticket_closed": "Ticket #{id} closed.",
+                "ticket_ask_reply": "Send reply for ticket #{id}.",
+                "banned_msg": "🚫 Access restricted.\nReason: {reason}",
+                "notify_2d": "⏰ <b>{brand}</b>\nSub ends in <b>2 days</b>.\nRenew now and stay online. 💪",
+                "notify_1d": "⏰ <b>{brand}</b>\nOnly <b>1 day</b> left.\nRenew in advance. 🔥",
+                "notify_1h": "⏰ <b>{brand}</b>\nAbout <b>1 hour</b> left.\nRenew to keep access. ⚡",
+                "notify_exp": "❌ <b>{brand}</b>\nSubscription ended.\nRenew and you're back instantly. 🚀",
+                "traffic_out": "FluxVPN | Traffic limit",
+                "adm_ban": "🚫 Ban",
+                "adm_unban": "✅ Unban",
+                "adm_promo": "🏷 Promos",
+                "adm_add_balance": "💰 +balance",
+                "adm_set_traffic": "📶 Traffic",
+                "adm_tickets": "🎫 Tickets",
+                "ask_ban_id": "ID to ban:",
+                "ask_ban_reason": "Ban reason:",
+                "ask_unban_id": "ID to unban:",
+                "ask_add_balance": "Format: ID AMOUNT\nExample: 123456 200",
+                "ask_promo_create": "Format:\nCODE days N\nCODE balance N\nExample:\nFLUX50 days 7",
+                "ban_ok": "🚫 Banned <code>{id}</code>",
+                "unban_ok": "✅ Unbanned <code>{id}</code>",
+                "balance_added": "✅ Balance <code>{id}</code> +{amount}₽ (now {bal:.0f}₽)",
+                "promo_created": "✅ Promo <code>{code}</code> created.",
+                "status_bal": "Balance · <b>{bal:.0f}₽</b>",
+                "status_traffic": "Traffic · <b>{used:.1f}/{limit:.0f} GB</b>",
         "lang_set": "Language saved: English",
     },
 }
@@ -353,6 +470,63 @@ def ensure_schema(conn):
                 conn.run("alter table devices add column blocked boolean not null default false")
             except Exception:
                 pass
+        ucols = {
+            r[0]
+            for r in conn.run(
+                "select column_name from information_schema.columns where table_name='users'"
+            )
+        }
+        for col, ddl in [
+            ("balance", "add column balance double precision not null default 0"),
+            ("banned", "add column banned boolean not null default false"),
+            ("ban_reason", "add column ban_reason text"),
+            ("traffic_limit", "add column traffic_limit bigint not null default 0"),
+            ("traffic_used", "add column traffic_used bigint not null default 0"),
+            ("notify_2d", "add column notify_2d boolean not null default false"),
+            ("notify_1d", "add column notify_1d boolean not null default false"),
+            ("notify_1h", "add column notify_1h boolean not null default false"),
+            ("notify_exp", "add column notify_exp boolean not null default false"),
+        ]:
+            if col not in ucols:
+                try:
+                    conn.run("alter table users " + ddl)
+                except Exception:
+                    pass
+        conn.run(
+            "create table if not exists promo_codes ("
+            "code text primary key, "
+            "kind text not null, "
+            "value double precision not null, "
+            "max_uses integer not null default 1, "
+            "used_count integer not null default 0, "
+            "active boolean not null default true, "
+            "created_at timestamptz not null default now())"
+        )
+        conn.run(
+            "create table if not exists promo_redemptions ("
+            "id bigserial primary key, "
+            "code text not null, "
+            "telegram_id bigint not null, "
+            "created_at timestamptz not null default now(), "
+            "unique(code, telegram_id))"
+        )
+        conn.run(
+            "create table if not exists tickets ("
+            "id bigserial primary key, "
+            "telegram_id bigint not null, "
+            "status text not null default 'open', "
+            "subject text not null default '', "
+            "created_at timestamptz not null default now(), "
+            "updated_at timestamptz not null default now())"
+        )
+        conn.run(
+            "create table if not exists ticket_messages ("
+            "id bigserial primary key, "
+            "ticket_id bigint not null, "
+            "sender text not null, "
+            "body text not null, "
+            "created_at timestamptz not null default now())"
+        )
         _schema_ready = True
 
 def api(method, payload=None, timeout=60):
@@ -411,6 +585,15 @@ def user_row(r):
         "username": r[8] if len(r) > 8 else None,
         "full_name": r[9] if len(r) > 9 else None,
         "lang": r[10] if len(r) > 10 else None,
+        "balance": float(r[11] or 0) if len(r) > 11 else 0.0,
+        "banned": bool(r[12]) if len(r) > 12 else False,
+        "ban_reason": r[13] if len(r) > 13 else None,
+        "traffic_limit": int(r[14] or 0) if len(r) > 14 else 0,
+        "traffic_used": int(r[15] or 0) if len(r) > 15 else 0,
+        "notify_2d": bool(r[16]) if len(r) > 16 else False,
+        "notify_1d": bool(r[17]) if len(r) > 17 else False,
+        "notify_1h": bool(r[18]) if len(r) > 18 else False,
+        "notify_exp": bool(r[19]) if len(r) > 19 else False,
     }
 
 def gen_codes():
@@ -464,6 +647,9 @@ def lang_of(user):
 def status_text(user):
     lang = lang_of(user)
     active = is_active(user["status"], user["subscription_expires"])
+    bal = float(user.get("balance") or 0)
+    tlim = float(user.get("traffic_limit") or 0) / (1024 ** 3)
+    tused = float(user.get("traffic_used") or 0) / (1024 ** 3)
     lines = [
         t(lang, "status_title", brand=BRAND),
         "",
@@ -474,6 +660,9 @@ def status_text(user):
         lines.append(t(lang, "days", days=days_left(user["subscription_expires"])))
     else:
         lines.append(t(lang, "inactive"))
+    lines.append(t(lang, "status_bal", bal=bal))
+    if tlim > 0:
+        lines.append(t(lang, "status_traffic", used=tused, limit=tlim))
     lines.append(t(lang, "refs", n=user.get("referral_count") or 0, bonus=REF_BONUS_DAYS))
     if not active and not user["trial_used"]:
         lines.extend(["", t(lang, "trial_avail")])
@@ -519,6 +708,11 @@ def kb_main(user):
         ref_row.append({"text": t(lang, "btn_copy_ref"), "copy_text": {"text": rlink}})
     rows.append(ref_row)
 
+    rows.append([
+        {"text": t(lang, "btn_balance"), "callback_data": "balance"},
+        {"text": t(lang, "btn_promo"), "callback_data": "promo"},
+    ])
+    rows.append([{"text": t(lang, "btn_support"), "callback_data": "support"}])
     rows.append([{"text": "EN / RU", "callback_data": "lang_menu"}])
     if user["telegram_id"] == ADMIN_ID:
         rows.append([{"text": t(lang, "btn_admin"), "callback_data": "admin"}])
@@ -544,6 +738,167 @@ def kb_servers(user):
         ])
     rows.append([{"text": t(lang, "btn_back"), "callback_data": "mysub"}])
     return {"inline_keyboard": rows}
+
+
+def gb(n):
+    return float(n) * (1024 ** 3)
+
+
+def traffic_limit_for_days(days):
+    return int(gb(TRAFFIC_GB_BY_DAYS.get(int(days), 100)))
+
+
+def ensure_traffic_defaults(conn, user, days=None, is_trial=False):
+    if int(user.get("traffic_limit") or 0) > 0:
+        return user
+    lim = int(gb(TRAFFIC_GB_TRIAL)) if is_trial else traffic_limit_for_days(days or 30)
+    conn.run(
+        "update users set traffic_limit=:l, traffic_used=coalesce(traffic_used,0) where telegram_id=:id",
+        l=lim,
+        id=user["telegram_id"],
+    )
+    return get_user(conn, user["telegram_id"])
+
+
+def traffic_ok(user):
+    lim = int(user.get("traffic_limit") or 0)
+    used = int(user.get("traffic_used") or 0)
+    if lim <= 0:
+        return True
+    return used < lim
+
+
+def add_balance(conn, tg_id, amount):
+    conn.run(
+        "update users set balance = coalesce(balance,0) + :a where telegram_id=:id",
+        a=float(amount),
+        id=int(tg_id),
+    )
+    return get_user(conn, int(tg_id))
+
+
+def set_banned(conn, tg_id, banned, reason=""):
+    conn.run(
+        "update users set banned=:b, ban_reason=:r where telegram_id=:id",
+        b=bool(banned),
+        r=(reason or None),
+        id=int(tg_id),
+    )
+    return get_user(conn, int(tg_id))
+
+
+def reset_notify_flags(conn, tg_id):
+    conn.run(
+        "update users set notify_2d=false, notify_1d=false, notify_1h=false, notify_exp=false where telegram_id=:id",
+        id=int(tg_id),
+    )
+
+
+def kb_admin_order(uid, days):
+    return {
+        "inline_keyboard": [
+            [{
+                "text": t("ru", "btn_order_paid"),
+                "callback_data": "paid_" + str(int(uid)) + "_" + str(int(days)),
+            }],
+            [{
+                "text": t("ru", "btn_reject_order"),
+                "callback_data": "rej_" + str(int(uid)) + "_" + str(int(days)),
+            }],
+        ]
+    }
+
+
+def kb_topup_packs(lang):
+    row = []
+    rows = []
+    for a in TOPUP_PACKS:
+        row.append({"text": str(a) + "₽", "callback_data": "top_" + str(a)})
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([{"text": t(lang, "btn_back"), "callback_data": "mysub"}])
+    return {"inline_keyboard": rows}
+
+
+def kb_topup_order(lang, amount, order_text):
+    return {
+        "inline_keyboard": [
+            [{"text": t(lang, "btn_write_admin"), "url": admin_dm_link(order_text)}],
+            [{"text": t(lang, "btn_back"), "callback_data": "balance"}],
+        ]
+    }
+
+
+def kb_admin_topup(uid, amount):
+    return {
+        "inline_keyboard": [
+            [{
+                "text": t("ru", "btn_topup_paid"),
+                "callback_data": "topok_" + str(int(uid)) + "_" + str(int(amount)),
+            }],
+            [{
+                "text": t("ru", "btn_reject_order"),
+                "callback_data": "toprej_" + str(int(uid)) + "_" + str(int(amount)),
+            }],
+        ]
+    }
+
+
+def kb_buy_order(lang, order_text, days):
+    rows = [
+        [{"text": t(lang, "btn_write_admin"), "url": admin_dm_link(order_text)}],
+        [{"text": t(lang, "btn_pay_balance"), "callback_data": "paybal_" + str(int(days))}],
+        [{"text": t(lang, "btn_choose_plan"), "callback_data": "buy"}],
+        [{"text": t(lang, "btn_back"), "callback_data": "mysub"}],
+    ]
+    return {"inline_keyboard": rows}
+
+
+def kb_balance(lang):
+    return {
+        "inline_keyboard": [
+            [{"text": t(lang, "btn_topup"), "callback_data": "topup"}],
+            [{"text": t(lang, "btn_buy"), "callback_data": "buy"}],
+            [{"text": t(lang, "btn_back"), "callback_data": "mysub"}],
+        ]
+    }
+
+
+def kb_ticket_admin(tid):
+    return {
+        "inline_keyboard": [
+            [
+                {"text": t("ru", "btn_ticket_reply"), "callback_data": "trep_" + str(int(tid))},
+                {"text": t("ru", "btn_ticket_close"), "callback_data": "tclose_" + str(int(tid))},
+            ]
+        ]
+    }
+
+
+def traffic_sub_body(lang="ru"):
+    title = t(lang, "traffic_out") if lang in ("ru", "en") else "FluxVPN | Traffic limit"
+    remark = urllib.parse.quote(title, safe="")
+    return (
+        "vless://00000000-0000-0000-0000-000000000000@127.0.0.1:1"
+        "?encryption=none&security=none&type=tcp#" + remark + chr(10)
+    )
+
+
+def maybe_soft_traffic_tick(conn, user):
+    # soft accounting without VPS: +8MB per successful config fetch (approx client refresh)
+    try:
+        conn.run(
+            "update users set traffic_used = coalesce(traffic_used,0) + :add where telegram_id=:id",
+            add=8 * 1024 * 1024,
+            id=user["telegram_id"],
+        )
+    except Exception:
+        pass
+    return get_user(conn, user["telegram_id"])
+
 
 def kb_buy_plans(lang):
     return {
@@ -583,27 +938,6 @@ def make_order_text(user, days):
     return chr(10).join(parts)
 
 
-def kb_admin_order(uid, days):
-    return {
-        "inline_keyboard": [
-            [{
-                "text": t("ru", "btn_order_paid"),
-                "callback_data": "paid_" + str(int(uid)) + "_" + str(int(days)),
-            }],
-        ]
-    }
-
-
-def kb_buy_order(lang, order_text):
-    return {
-        "inline_keyboard": [
-            [{"text": t(lang, "btn_write_admin"), "url": admin_dm_link(order_text)}],
-            [{"text": t(lang, "btn_choose_plan"), "callback_data": "buy"}],
-            [{"text": t(lang, "btn_back"), "callback_data": "mysub"}],
-        ]
-    }
-
-
 def kb_cancel(lang):
     return {"inline_keyboard": [[{"text": t(lang, "cancel"), "callback_data": "adm_cancel"}]]}
 
@@ -627,18 +961,27 @@ def kb_admin(lang):
                 {"text": t(lang, "adm_revoke"), "callback_data": "adm_revoke"},
             ],
             [
+                {"text": t(lang, "adm_ban"), "callback_data": "adm_ban"},
+                {"text": t(lang, "adm_unban"), "callback_data": "adm_unban"},
+            ],
+            [
+                {"text": t(lang, "adm_add_balance"), "callback_data": "adm_add_balance"},
                 {"text": t(lang, "adm_reset_devices"), "callback_data": "adm_reset_devices"},
+            ],
+            [
+                {"text": t(lang, "adm_promo"), "callback_data": "adm_promo"},
+                {"text": t(lang, "adm_tickets"), "callback_data": "adm_tickets"},
+            ],
+            [
                 {"text": t(lang, "adm_servers"), "callback_data": "adm_servers"},
-            ],
-            [
                 {"text": t(lang, "adm_add_srv"), "callback_data": "adm_add_srv"},
+            ],
+            [
                 {"text": t(lang, "adm_del_srv"), "callback_data": "adm_del_srv"},
-            ],
-            [
                 {"text": t(lang, "adm_broadcast"), "callback_data": "adm_broadcast"},
-                {"text": t(lang, "adm_prices"), "callback_data": "adm_prices"},
             ],
             [
+                {"text": t(lang, "adm_prices"), "callback_data": "adm_prices"},
                 {"text": t(lang, "adm_orders_help"), "callback_data": "adm_orders_help"},
             ],
             [{"text": t(lang, "btn_back"), "callback_data": "mysub"}],
@@ -750,10 +1093,17 @@ def extend_subscription(conn, tg_id, days, status="premium"):
         if exp > now:
             base = exp
     expires = base + timedelta(days=int(days))
+    lim = traffic_limit_for_days(days) if status == "premium" else int(gb(TRAFFIC_GB_TRIAL))
+    # on extend: keep used, raise limit at least to plan default if lower
+    cur_lim = int(user.get("traffic_limit") or 0)
+    new_lim = max(cur_lim, lim)
     conn.run(
-        "update users set status=:s, subscription_expires=:e where telegram_id=:id",
+        "update users set status=:s, subscription_expires=:e, traffic_limit=:l, "
+        "notify_2d=false, notify_1d=false, notify_1h=false, notify_exp=false "
+        "where telegram_id=:id",
         s=status,
         e=expires,
+        l=new_lim,
         id=tg_id,
     )
     return get_user(conn, tg_id)
@@ -930,6 +1280,9 @@ def handle_start(conn, msg, ref_code=None):
     user = ensure_user(
         conn, tg_id, username=username, full_name=full_name, ref_code=ref_code if is_new else None
     )
+    if user.get("banned") and tg_id != ADMIN_ID:
+        send(chat, t(lang_of(user), "banned_msg", reason=user.get("ban_reason") or "—"))
+        return
     if not user.get("lang"):
         PENDING[tg_id] = {"action": "choose_lang", "ref_new": bool(is_new and ref_code)}
         send(chat, TEXTS["ru"]["choose_lang"], kb_lang())
@@ -957,6 +1310,9 @@ def handle_cb(conn, cq):
     username, full_name = from_user_meta(cq.get("from") or {})
     user = ensure_user(conn, tg_id, username=username, full_name=full_name)
     lang = lang_of(user)
+    if user.get("banned") and tg_id != ADMIN_ID:
+        ans(cq["id"], t(lang, "banned_msg", reason=user.get("ban_reason") or "—"), True)
+        return
 
     if data in ("lang_ru", "lang_en"):
         lg = "ru" if data.endswith("ru") else "en"
@@ -998,9 +1354,10 @@ def handle_cb(conn, cq):
             return
         exp = utcnow() + timedelta(days=7)
         conn.run(
-            "update users set status='trial', trial_used=true, subscription_expires=:e where telegram_id=:id",
+            "update users set status='trial', trial_used=true, subscription_expires=:e, traffic_limit=GREATEST(coalesce(traffic_limit,0), :tl), notify_2d=false, notify_1d=false, notify_1h=false, notify_exp=false where telegram_id=:id",
             e=exp,
             id=tg_id,
+            tl=int(gb(TRAFFIC_GB_TRIAL)),
         )
         user = get_user(conn, tg_id)
         edit(chat, mid, t(lang, "trial_ok") + "\n\n" + status_text(user), kb_main(user))
@@ -1019,7 +1376,7 @@ def handle_cb(conn, cq):
             return
         order = make_order_text(user, days)
         text = t(lang, "buy_order", days=days, price=plan_price(days), order=html_lib.escape(order))
-        edit(chat, mid, text, kb_buy_order(lang, order))
+        edit(chat, mid, text, kb_buy_order(lang, order, days))
         # notify admin in background-ish
         try:
             uname = html_lib.escape(display_name(user))
@@ -1255,9 +1612,10 @@ def handle_admin_text(conn, msg):
         ensure_user(conn, uid)
         exp = utcnow() + timedelta(days=7)
         conn.run(
-            "update users set status='trial', trial_used=true, subscription_expires=:e where telegram_id=:id",
+            "update users set status='trial', trial_used=true, subscription_expires=:e, traffic_limit=GREATEST(coalesce(traffic_limit,0), :tl), notify_2d=false, notify_1d=false, notify_1h=false, notify_exp=false where telegram_id=:id",
             e=exp,
             id=uid,
+            tl=int(gb(TRAFFIC_GB_TRIAL)),
         )
         clear_pending(tg_id)
         send(chat, t(lang, "trial_given", id=uid), kb_admin(lang))
@@ -1318,6 +1676,177 @@ def handle_admin_text(conn, msg):
             kb_admin(lang),
         )
         return True
+
+
+    if action == "promo_code":
+        code = text.strip().upper()
+        clear_pending(tg_id)
+        row = conn.run(
+            "select code, kind, value, max_uses, used_count, active from promo_codes where code=:c limit 1",
+            c=code,
+        )
+        if not row or not row[0][5]:
+            send(chat, t(lang, "promo_bad"), kb_main(user))
+            return True
+        kind = row[0][1]
+        val = float(row[0][2])
+        max_uses = int(row[0][3])
+        used = int(row[0][4])
+        if used >= max_uses:
+            send(chat, t(lang, "promo_bad"), kb_main(user))
+            return True
+        already = conn.run(
+            "select 1 from promo_redemptions where code=:c and telegram_id=:id limit 1",
+            c=code,
+            id=tg_id,
+        )
+        if already:
+            send(chat, t(lang, "promo_used"), kb_main(user))
+            return True
+        if kind == "days":
+            user = extend_subscription(conn, tg_id, int(val), status="premium")
+            msg = t(lang, "promo_ok_days", v=int(val))
+        elif kind == "balance":
+            user = add_balance(conn, tg_id, val)
+            msg = t(lang, "promo_ok_balance", v=val)
+        else:
+            send(chat, t(lang, "promo_bad"), kb_main(user))
+            return True
+        conn.run(
+            "insert into promo_redemptions (code, telegram_id) values (:c, :id)",
+            c=code,
+            id=tg_id,
+        )
+        conn.run(
+            "update promo_codes set used_count = used_count + 1 where code=:c",
+            c=code,
+        )
+        send(chat, msg + chr(10) + chr(10) + status_text(user), kb_main(user))
+        return True
+
+    if action == "support_new":
+        clear_pending(tg_id)
+        subj = text[:80]
+        rows = conn.run(
+            "insert into tickets (telegram_id, status, subject) values (:id, 'open', :s) returning id",
+            id=tg_id,
+            s=subj,
+        )
+        tid = int(rows[0][0])
+        conn.run(
+            "insert into ticket_messages (ticket_id, sender, body) values (:t, 'user', :b)",
+            t=tid,
+            b=text,
+        )
+        send(chat, t(lang, "support_created", id=tid), kb_main(user))
+        try:
+            send(
+                ADMIN_ID,
+                t("ru", "support_new_admin", id=tid, uid=tg_id, name=html_lib.escape(display_name(user)), body=html_lib.escape(text)),
+                kb_ticket_admin(tid),
+            )
+        except Exception:
+            pass
+        return True
+
+    if action == "ticket_reply":
+        tid = int(pend.get("ticket_id") or 0)
+        clear_pending(tg_id)
+        rows = conn.run("select telegram_id from tickets where id=:id limit 1", id=tid)
+        if not rows:
+            send(chat, t(lang, "not_found"), kb_admin(lang))
+            return True
+        uid = int(rows[0][0])
+        conn.run(
+            "insert into ticket_messages (ticket_id, sender, body) values (:t, 'admin', :b)",
+            t=tid,
+            b=text,
+        )
+        conn.run("update tickets set updated_at=now() where id=:id", id=tid)
+        send(chat, "OK #" + str(tid), kb_admin(lang))
+        try:
+            u = get_user(conn, uid)
+            send(uid, t(lang_of(u or {}), "support_reply_user", id=tid, body=html_lib.escape(text)))
+        except Exception:
+            pass
+        return True
+
+    if action == "ban_id":
+        if not text.isdigit():
+            send(chat, t(lang, "ask_ban_id"), kb_cancel(lang))
+            return True
+        PENDING[tg_id] = {"action": "ban_reason", "ban_uid": int(text)}
+        send(chat, t(lang, "ask_ban_reason"), kb_cancel(lang))
+        return True
+
+    if action == "ban_reason":
+        uid = int(pend.get("ban_uid") or 0)
+        clear_pending(tg_id)
+        set_banned(conn, uid, True, text)
+        send(chat, t(lang, "ban_ok", id=uid), kb_admin(lang))
+        try:
+            send(uid, t("ru", "banned_msg", reason=html_lib.escape(text)))
+        except Exception:
+            pass
+        return True
+
+    if action == "unban_id":
+        if not text.isdigit():
+            send(chat, t(lang, "ask_unban_id"), kb_cancel(lang))
+            return True
+        uid = int(text)
+        clear_pending(tg_id)
+        set_banned(conn, uid, False, "")
+        send(chat, t(lang, "unban_ok", id=uid), kb_admin(lang))
+        return True
+
+    if action == "add_balance":
+        parts = text.split()
+        if len(parts) < 2 or (not parts[0].isdigit()):
+            send(chat, t(lang, "ask_add_balance"), kb_cancel(lang))
+            return True
+        try:
+            amount = float(parts[1].replace(",", "."))
+        except Exception:
+            send(chat, t(lang, "ask_add_balance"), kb_cancel(lang))
+            return True
+        uid = int(parts[0])
+        clear_pending(tg_id)
+        u = add_balance(conn, uid, amount)
+        send(chat, t(lang, "balance_added", id=uid, amount=amount, bal=float(u.get("balance") or 0)), kb_admin(lang))
+        try:
+            send(uid, t(lang_of(u), "topup_paid_user", amount=amount, bal=float(u.get("balance") or 0)))
+        except Exception:
+            pass
+        return True
+
+    if action == "promo_create":
+        parts = text.split()
+        clear_pending(tg_id)
+        if len(parts) < 3:
+            send(chat, t(lang, "ask_promo_create"), kb_admin(lang))
+            return True
+        code = parts[0].strip().upper()
+        kind = parts[1].strip().lower()
+        try:
+            val = float(parts[2].replace(",", "."))
+        except Exception:
+            send(chat, t(lang, "ask_promo_create"), kb_admin(lang))
+            return True
+        if kind not in ("days", "balance"):
+            send(chat, t(lang, "ask_promo_create"), kb_admin(lang))
+            return True
+        max_uses = 100
+        if len(parts) >= 4 and parts[3].isdigit():
+            max_uses = int(parts[3])
+        conn.run(
+            "insert into promo_codes (code, kind, value, max_uses, used_count, active) "
+            "values (:c, :k, :v, :m, 0, true) on conflict (code) do update set kind=:k, value=:v, max_uses=:m, active=true",
+            c=code, k=kind, v=val, m=max_uses,
+        )
+        send(chat, t(lang, "promo_created", code=code), kb_admin(lang))
+        return True
+
 
     return False
 
@@ -1859,6 +2388,9 @@ class Handler(BaseHTTPRequestHandler):
                             exp_ts = int(exp.timestamp())
 
                         if browser:
+                            if user.get("banned"):
+                                self._send(200, "text/html; charset=utf-8", render_denied())
+                                return
                             if not active:
                                 self._send(200, "text/html; charset=utf-8", render_denied())
                             else:
@@ -1873,8 +2405,15 @@ class Handler(BaseHTTPRequestHandler):
                             return
 
                         # VPN clients
+                        if user.get("banned"):
+                            send_sub_response(self, expired_sub_body(lang), expire_ts=exp_ts)
+                            return
                         if not active:
                             send_sub_response(self, expired_sub_body(lang), expire_ts=exp_ts)
+                            return
+                        user = ensure_traffic_defaults(conn, user, days=30, is_trial=(user.get("status")=="trial"))
+                        if not traffic_ok(user):
+                            send_sub_response(self, traffic_sub_body(lang), expire_ts=exp_ts)
                             return
 
                         allowed, cnt, limit, reason = touch_device(conn, user, ua, ip)
@@ -1883,12 +2422,26 @@ class Handler(BaseHTTPRequestHandler):
                             send_sub_response(self, body, expire_ts=exp_ts)
                             return
 
+                        user = maybe_soft_traffic_tick(conn, user)
+                        if not traffic_ok(user):
+                            send_sub_response(self, traffic_sub_body(lang), expire_ts=exp_ts)
+                            return
                         servers = get_servers(conn)
                         lines = [brand_config(s[1], s[2]) for s in servers if brand_config(s[1], s[2])]
                         body = chr(10).join(lines)
                         if body:
                             body = body + chr(10)
-                        send_sub_response(self, body, expire_ts=exp_ts)
+                        # subscription-userinfo traffic
+                        used = int(user.get("traffic_used") or 0)
+                        limit_b = int(user.get("traffic_limit") or 0)
+                        data = body.encode("utf-8")
+                        self.send_response(200)
+                        for k, v in sub_headers(expire_ts=exp_ts, upload=0, download=used, total=limit_b).items():
+                            self.send_header(k, v)
+                        self.send_header("Content-Length", str(len(data)))
+                        self.end_headers()
+                        self.wfile.write(data)
+                        return
                     finally:
                         conn.close()
                     return
@@ -1913,9 +2466,59 @@ def resolve_bot_username():
     except Exception as e:
         print("getMe", e, flush=True)
 
+
+def notification_loop():
+    while True:
+        try:
+            conn = db()
+            try:
+                ensure_schema(conn)
+                rows = conn.run(USER_SELECT)
+                now = utcnow()
+                for r in rows:
+                    u = user_row(r)
+                    if u.get("banned"):
+                        continue
+                    exp = u.get("subscription_expires")
+                    if not exp:
+                        continue
+                    if getattr(exp, "tzinfo", None) is None:
+                        exp = exp.replace(tzinfo=timezone.utc)
+                    left = (exp - now).total_seconds()
+                    lang = lang_of(u)
+                    tid = u["telegram_id"]
+                    def mark(flag):
+                        conn.run("update users set " + flag + "=true where telegram_id=:id", id=tid)
+                    try:
+                        if left <= 0:
+                            if not u.get("notify_exp"):
+                                send(tid, t(lang, "notify_exp", brand=BRAND), None)
+                                mark("notify_exp")
+                        elif left <= 3600:
+                            if not u.get("notify_1h"):
+                                send(tid, t(lang, "notify_1h", brand=BRAND))
+                                mark("notify_1h")
+                        elif left <= 86400:
+                            if not u.get("notify_1d"):
+                                send(tid, t(lang, "notify_1d", brand=BRAND))
+                                mark("notify_1d")
+                        elif left <= 2 * 86400:
+                            if not u.get("notify_2d"):
+                                send(tid, t(lang, "notify_2d", brand=BRAND))
+                                mark("notify_2d")
+                    except Exception:
+                        pass
+            finally:
+                conn.close()
+        except Exception as e:
+            print("notify loop", e, flush=True)
+        time.sleep(60)
+
+
 def main():
     print("starting " + BRAND, flush=True)
     start_http()
+    threading.Thread(target=notification_loop, daemon=True).start()
     time.sleep(0.2)
     resolve_bot_username()
     try:
