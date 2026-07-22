@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: vpn-bot
+    name: fluxvpn-bot
     runtime: python
     plan: free
     region: frankfurt
@@ -11,12 +11,14 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.11"
       - key: BOT_TOKEN
-        value: "8895620936:AAF1xmCh1tO-hn0lMNigLAe8LLPIcwVDgQg"
+        sync: false
       - key: DATABASE_URL
-        value: "postgresql://neondb_owner:npg_KjqZrHsJn6E1@ep-noisy-butterfly-avbk5yxh.c-11.us-east-1.aws.neon.tech/neondb?sslmode=require"
+        sync: false
       - key: ADMIN_ID
         value: "6049379160"
       - key: ADMIN_USERNAME
         value: "zrdws"
       - key: CRYPTO_BOT_TOKEN
-        value: "599850:AA21TXJWkZO0aZT8DZFbB6NIwdj6jtKZ3YB"
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
